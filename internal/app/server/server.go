@@ -35,6 +35,7 @@ func (s *Server) Start() error {
 
 func (s *Server) configureRouter() {
 	s.router.HandleFunc("/api/users/test", s.handleTest())
+	//s.router.HandleFunc("/api/user/login", s.handleLogin())
 }
 
 func (s *Server) configureStore() error {
@@ -54,4 +55,9 @@ func (s *Server) handleTest() http.HandlerFunc {
 			s.logger.Printf("Error processing request at `/api/users/test`: %s", err)
 		}
 	}
+}
+
+func (s *Server) handleLogin() http.HandlerFunc {
+
+	return nil
 }

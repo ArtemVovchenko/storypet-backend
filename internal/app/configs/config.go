@@ -1,6 +1,7 @@
 package configs
 
 import (
+	database "github.com/ArtemVovchenko/storypet-backend/internal/app/store/configs"
 	"os"
 )
 
@@ -9,11 +10,7 @@ type ServerConfig struct {
 	LogPrefix    string
 	LogFlags     int
 	LogOutStream *os.File
-	Database     *DatabaseConfig
-}
-
-type DatabaseConfig struct {
-	ConnectionString string
+	Database     *database.DatabaseConfig
 }
 
 func NewServerConfig() *ServerConfig {
@@ -22,12 +19,6 @@ func NewServerConfig() *ServerConfig {
 		LogPrefix:    SrvLogPrefix,
 		LogFlags:     SrvLogFlags,
 		LogOutStream: SrvLogStream,
-		Database:     newDatabaseConfig(),
-	}
-}
-
-func newDatabaseConfig() *DatabaseConfig {
-	return &DatabaseConfig{
-		ConnectionString: DbUrl,
+		Database:     database.NewDatabaseConfig(),
 	}
 }

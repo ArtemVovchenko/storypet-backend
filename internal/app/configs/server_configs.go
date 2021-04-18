@@ -14,7 +14,4 @@ var (
 	SrvLogFlags = log.LstdFlags
 	// SrvLogPrefix is an logging message's prefix
 	SrvLogPrefix = "SRV:"
-
-	// DbUrl is the connection string to the database
-	DbUrl = os.Getenv("DATABASE_URL")
 )

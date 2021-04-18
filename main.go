@@ -1,14 +1,14 @@
 package main
 
 import (
-	configs2 "github.com/ArtemVovchenko/storypet-backend/internal/app/configs"
+	"github.com/ArtemVovchenko/storypet-backend/internal/app/configs"
 	"github.com/ArtemVovchenko/storypet-backend/internal/app/server"
 	"log"
 )
 
 func main() {
-	configs := configs2.NewServerConfig()
-	s := server.New(configs)
+	config := configs.NewServerConfig()
+	s := server.New(config)
 
 	if err := s.Start(); err != nil {
 		log.Fatal(err)
