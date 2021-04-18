@@ -1,6 +1,8 @@
 package server
 
 import (
+	"github.com/ArtemVovchenko/storypet-backend/internal/app/configs"
+	"github.com/ArtemVovchenko/storypet-backend/internal/app/store"
 	"github.com/gorilla/mux"
 	"io"
 	"log"
@@ -8,12 +10,13 @@ import (
 )
 
 type Server struct {
-	config *Config
+	config *configs.ServerConfig
 	logger *log.Logger
 	router *mux.Router
+	store  *store.Store
 }
 
-func New(config *Config) *Server {
+func New(config *configs.ServerConfig) *Server {
 	return &Server{
 		config: config,
 		logger: log.New(config.LogOutStream, config.LogPrefix, config.LogFlags),
@@ -22,13 +25,26 @@ func New(config *Config) *Server {
 }
 
 func (s *Server) Start() error {
-	s.ConfigureRouter()
+	s.configureRouter()
+	if err := s.configureStore(); err != nil {
+		return err
+	}
 	s.logger.Println("starting server")
 	return http.ListenAndServe(s.config.BindAddr, s.router)
 }
 
-func (s *Server) ConfigureRouter() {
+func (s *Server) configureRouter() {
 	s.router.HandleFunc("/api/users/test", s.handleTest())
+}
+
+func (s *Server) configureStore() error {
+	st := store.New(s.config.Database)
+	if err := st.Open(); err != nil {
+		return err
+	}
+
+	s.store = st
+	return nil
 }
 
 func (s *Server) handleTest() http.HandlerFunc {
