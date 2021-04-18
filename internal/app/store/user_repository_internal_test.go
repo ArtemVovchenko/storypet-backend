@@ -23,7 +23,7 @@ func TestUserRepository_FindByAccountEmail(t *testing.T) {
 	}
 
 	actual, err := store.Users().FindByAccountEmail("vovchenko.artem@icloud.com")
-	assert.Equal(t, nil, err)
+	assert.NoError(t, err)
 
 	assert.Equal(t, expected.AccountEmail, actual.AccountEmail)
 	assert.Equal(t, expected.PasswordSHA256, actual.PasswordSHA256)
@@ -47,40 +47,22 @@ func TestUserRepository_Create(t *testing.T) {
 	_ = store.Open()
 	defer store.Close()
 
-	expected := &models.User{
-		UserID:         0,
-		AccountEmail:   "blabla@gmail.com",
-		PasswordSHA256: "123",
-		Username:       "blashka",
-		FullName:       "Yurii Ivanitskiy",
-		BackupEmail:    &sql.NullString{String: "yi@gmail.com", Valid: true},
-		Location:       &sql.NullString{String: "Kiyiv, Ukraine", Valid: true},
-	}
+	expected := models.TestUser(t)
 
 	actual, err := store.Users().Create(expected)
-	assert.Equal(t, nil, err)
-
-	assert.Equal(t, expected.AccountEmail, actual.AccountEmail)
-	assert.Equal(t, expected.PasswordSHA256, actual.PasswordSHA256)
-	assert.Equal(t, expected.Username, actual.Username)
-	assert.Equal(t, expected.FullName, actual.FullName)
-	assert.Equal(t, expected.BackupEmail.String, actual.BackupEmail.String)
-	assert.Equal(t, expected.Location.String, actual.Location.String)
+	assert.NoError(t, err)
+	err = actual.Validate()
+	assert.NoError(t, err)
+	assert.NotEmpty(t, actual)
+	assert.NotEmpty(t, actual.PasswordSHA256)
 }
 
 func TestUserRepository_FindByAccountEmail3(t *testing.T) {
 	store := New(configs.NewDatabaseConfig())
 	_ = store.Open()
 	defer store.Close()
-	expected := &models.User{
-		UserID:         0,
-		AccountEmail:   "blabla@gmail.com",
-		PasswordSHA256: "123",
-		Username:       "blashka",
-		FullName:       "Yurii Ivanitskiy",
-		BackupEmail:    &sql.NullString{String: "yi@gmail.com", Valid: true},
-		Location:       &sql.NullString{String: "Kiyiv, Ukraine", Valid: true},
-	}
+	expected := models.TestUser(t)
+	expected.BeforeCreate()
 
 	actual, err := store.Users().FindByAccountEmail(expected.AccountEmail)
 	if err != nil {
@@ -88,7 +70,6 @@ func TestUserRepository_FindByAccountEmail3(t *testing.T) {
 	}
 
 	assert.Equal(t, expected.AccountEmail, actual.AccountEmail)
-	assert.Equal(t, expected.PasswordSHA256, actual.PasswordSHA256)
 	assert.Equal(t, expected.Username, actual.Username)
 	assert.Equal(t, expected.FullName, actual.FullName)
 	assert.Equal(t, expected.BackupEmail.String, actual.BackupEmail.String)
@@ -99,24 +80,15 @@ func TestUserRepository_DeleteByID(t *testing.T) {
 	store := New(configs.NewDatabaseConfig())
 	_ = store.Open()
 	defer store.Close()
-	expected := &models.User{
-		UserID:         0,
-		AccountEmail:   "blabla@gmail.com",
-		PasswordSHA256: "123",
-		Username:       "blashka",
-		FullName:       "Yurii Ivanitskiy",
-		BackupEmail:    &sql.NullString{String: "yi@gmail.com", Valid: true},
-		Location:       &sql.NullString{String: "Kiyiv, Ukraine", Valid: true},
-	}
+	models.TestUser(t)
 
-	model, err := store.Users().FindByAccountEmail(expected.AccountEmail)
-	assert.Equal(t, nil, err)
+	expected, err := store.Users().FindByAccountEmail(models.TestUser(t).AccountEmail)
+	assert.NoError(t, err)
 
-	actual, err := store.Users().DeleteByID(model.UserID)
-	assert.Equal(t, nil, err)
+	actual, err := store.Users().DeleteByID(expected.UserID)
+	assert.NoError(t, err)
 
 	assert.Equal(t, expected.AccountEmail, actual.AccountEmail)
-	assert.Equal(t, expected.PasswordSHA256, actual.PasswordSHA256)
 	assert.Equal(t, expected.Username, actual.Username)
 	assert.Equal(t, expected.FullName, actual.FullName)
 	assert.Equal(t, expected.BackupEmail.String, actual.BackupEmail.String)

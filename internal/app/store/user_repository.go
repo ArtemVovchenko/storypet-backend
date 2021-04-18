@@ -7,6 +7,14 @@ type UserRepository struct {
 }
 
 func (r *UserRepository) Create(u *models.User) (*models.User, error) {
+	if err := u.Validate(); err != nil {
+		return nil, err
+	}
+
+	if err := u.BeforeCreate(); err != nil {
+		return nil, err
+	}
+
 	transaction, err := r.store.db.Beginx()
 	if err != nil {
 		return nil, err
@@ -50,22 +58,15 @@ func (r *UserRepository) DeleteByID(id int) (*models.User, error) {
 	if err != nil {
 		return nil, err
 	}
+	defer transaction.Rollback()
 
 	_, err = transaction.Exec(`DELETE FROM users WHERE user_id = $1`, userModel.UserID)
 	if err != nil {
-		txErr := transaction.Rollback()
-		if txErr != nil {
-			return nil, txErr
-		}
 		return nil, err
 	}
 
 	err = transaction.Commit()
 	if err != nil {
-		txErr := transaction.Rollback()
-		if txErr != nil {
-			return nil, txErr
-		}
 		return nil, err
 	}
 
@@ -81,5 +82,16 @@ func (r *UserRepository) FindByAccountEmail(email string) (*models.User, error) 
 		return nil, err
 	}
 
+	return userEntity, nil
+}
+
+func (r *UserRepository) FindByID(id int) (*models.User, error) {
+	userEntity := &models.User{}
+	if err := r.store.db.Get(userEntity,
+		`SELECT * FROM users WHERE user_id = $1`,
+		id,
+	); err != nil {
+		return nil, err
+	}
 	return userEntity, nil
 }

@@ -1,7 +1,9 @@
 package server
 
 import (
+	"encoding/json"
 	"github.com/ArtemVovchenko/storypet-backend/internal/app/configs"
+	"github.com/ArtemVovchenko/storypet-backend/internal/app/models"
 	"github.com/ArtemVovchenko/storypet-backend/internal/app/store"
 	"github.com/gorilla/mux"
 	"io"
@@ -34,8 +36,9 @@ func (s *Server) Start() error {
 }
 
 func (s *Server) configureRouter() {
-	s.router.HandleFunc("/api/users/test", s.handleTest())
-	//s.router.HandleFunc("/api/user/login", s.handleLogin())
+	s.router.Path("/api/users/test").Methods(http.MethodGet).HandlerFunc(s.handleTest()).Name("User Test")
+	s.router.Path("/api/users/login").Methods(http.MethodPost).HandlerFunc(nil).Name("User Login ")
+	s.router.Path("/api/users").Methods(http.MethodPost).HandlerFunc(s.handleRegistration()).Name("User Register")
 }
 
 func (s *Server) configureStore() error {
@@ -60,4 +63,50 @@ func (s *Server) handleTest() http.HandlerFunc {
 func (s *Server) handleLogin() http.HandlerFunc {
 
 	return nil
+}
+
+func (s *Server) handleRegistration() http.HandlerFunc {
+	type requestBody struct {
+		AccountEmail string  `json:"account_email"`
+		Password     string  `json:"password"`
+		Username     string  `json:"username"`
+		FullName     string  `json:"full_name"`
+		BackupEmail  *string `json:"backup_email"`
+		Location     *string `json:"location"`
+	}
+
+	return func(w http.ResponseWriter, r *http.Request) {
+		rb := &requestBody{}
+		if err := json.NewDecoder(r.Body).Decode(rb); err != nil {
+			s.respondError(w, r, http.StatusBadRequest, err)
+			return
+		}
+
+		u := &models.User{
+			AccountEmail: rb.AccountEmail,
+			Password:     rb.Password,
+			Username:     rb.Username,
+			FullName:     rb.FullName,
+		}
+		u.SetBackupEmail(rb.BackupEmail)
+		u.SetLocation(rb.Location)
+
+		if _, err := s.store.Users().Create(u); err != nil {
+			s.respondError(w, r, http.StatusUnprocessableEntity, err)
+			return
+		}
+		u.Sanitise()
+		s.respond(w, r, http.StatusCreated, u)
+	}
+}
+
+func (s *Server) respondError(w http.ResponseWriter, r *http.Request, statusCode int, err error) {
+	s.respond(w, r, statusCode, map[string]string{"error": err.Error()})
+}
+
+func (s *Server) respond(w http.ResponseWriter, r *http.Request, statusCode int, data interface{}) {
+	w.WriteHeader(statusCode)
+	if data != nil {
+		_ = json.NewEncoder(w).Encode(data)
+	}
 }
