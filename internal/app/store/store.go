@@ -2,13 +2,16 @@ package store
 
 import (
 	"github.com/ArtemVovchenko/storypet-backend/internal/app/store/configs"
+	"github.com/go-redis/redis/v7"
 	"github.com/jmoiron/sqlx"
 	_ "github.com/lib/pq"
 )
 
 type Store struct {
-	config         *configs.DatabaseConfig
-	db             *sqlx.DB
+	config      *configs.DatabaseConfig
+	db          *sqlx.DB
+	redisClient *redis.Client
+
 	userRepository *UserRepository
 }
 
@@ -28,11 +31,24 @@ func (s *Store) Open() error {
 		return err
 	}
 	s.db = db
+
+	s.redisClient = redis.NewClient(&redis.Options{
+		Addr: s.config.RedisDNS,
+	})
+
+	if _, err := s.redisClient.Ping().Result(); err != nil {
+		return err
+	}
 	return nil
+}
+
+func (s *Store) RedisClient() *redis.Client {
+	return s.redisClient
 }
 
 func (s *Store) Close() {
 	s.db.Close()
+	s.redisClient.Close()
 }
 
 func (s *Store) Users() *UserRepository {

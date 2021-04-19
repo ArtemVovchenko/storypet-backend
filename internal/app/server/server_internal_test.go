@@ -38,9 +38,15 @@ func TestServer_HandleRegisterRequest(t *testing.T) {
 		},
 
 		{
-			name:                 "Empty",
+			name:                 "Empty JSON",
 			payload:              map[string]string{},
 			expectedResponseCode: http.StatusUnprocessableEntity,
+		},
+
+		{
+			name:                 "Empty JSON",
+			payload:              "map[string]string{}",
+			expectedResponseCode: http.StatusBadRequest,
 		},
 
 		{

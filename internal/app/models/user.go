@@ -20,6 +20,13 @@ type User struct {
 	SpecifiedLocation    string          `json:"location,omitempty"`
 }
 
+type Role struct {
+	RoleID                   int             `db:"role_id" json:"role_id"`
+	RoleName                 string          `db:"name" json:"role_name"`
+	RoleDescription          *sql.NullString `db:"description" json:"-"`
+	RoleSpecifiedDescription string          `json:"role_description"`
+}
+
 func (u *User) BeforeCreate() error {
 	if len(u.Password) > 0 {
 		enc, err := encryptString(u.Password)
@@ -72,6 +79,10 @@ func (u *User) SetBackupEmail(backupEmail *string) {
 	}
 }
 
+func (u *User) ComparePasswords(password string) bool {
+	return bcrypt.CompareHashAndPassword([]byte(u.PasswordSHA256), []byte(password)) == nil
+}
+
 func (u *User) Sanitise() {
 	if u.BackupEmail.Valid {
 		u.SpecifiedBackupEmail = u.BackupEmail.String
@@ -91,7 +102,7 @@ func (u *User) Validate() error {
 		u,
 		validation.Field(&u.AccountEmail, validation.Required, is.Email),
 		validation.Field(&u.Password, validation.By(requiredIf(u.PasswordSHA256 != "")), is.Alphanumeric, validation.Length(6, 100)),
-		validation.Field(&u.Username, validation.Required, validation.Length(5, 15)),
+		validation.Field(&u.Username, validation.Required, validation.Length(5, 30)),
 		validation.Field(&u.FullName, validation.Required, validation.Length(5, 30)),
 		validation.Field(&u.SpecifiedBackupEmail, is.Email),
 	)
@@ -104,4 +115,26 @@ func encryptString(s string) (string, error) {
 	}
 
 	return string(b), nil
+}
+
+func (r *Role) BeforeCreate() {
+	if r.RoleSpecifiedDescription != "" {
+		r.RoleDescription = &sql.NullString{
+			String: r.RoleSpecifiedDescription,
+			Valid:  true,
+		}
+	} else {
+		r.RoleDescription = &sql.NullString{
+			String: "",
+			Valid:  false,
+		}
+	}
+}
+
+func (r *Role) SetDescription(description *string) {
+	if description != nil {
+		r.RoleSpecifiedDescription = *description
+	} else {
+		r.RoleSpecifiedDescription = ""
+	}
 }

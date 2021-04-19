@@ -94,3 +94,17 @@ func TestUserRepository_DeleteByID(t *testing.T) {
 	assert.Equal(t, expected.BackupEmail.String, actual.BackupEmail.String)
 	assert.Equal(t, expected.Location.String, actual.Location.String)
 }
+
+func TestUserRepository_SelectUserRoleIDs(t *testing.T) {
+	expectedLen := 2
+	userID := 34
+	store := New(configs.NewDatabaseConfig())
+	err := store.Open()
+	assert.NoError(t, err)
+	defer store.Close()
+
+	userRoles, err := store.Users().SelectUserRoleIDs(userID)
+	assert.NoError(t, err)
+	assert.Equal(t, expectedLen, len(userRoles))
+
+}
