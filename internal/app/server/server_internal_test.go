@@ -3,7 +3,7 @@ package server
 import (
 	"bytes"
 	"encoding/json"
-	"github.com/ArtemVovchenko/storypet-backend/internal/app/configs"
+	"fmt"
 	"github.com/stretchr/testify/assert"
 	"log"
 	"net/http"
@@ -11,15 +11,34 @@ import (
 	"testing"
 )
 
-func TestServer_HandleTestRequest(t *testing.T) {
-	s := New(configs.NewServerConfig())
+var (
+	s *Server
+)
+
+func TestMain(m *testing.M) {
+	s = New()
+	s.configureMiddleware()
+	s.configureRouter()
+	if err := s.configureStore(); err != nil {
+		log.Fatalln("could not configure databaseStore")
+	}
+	m.Run()
+}
+
+func TestServer_handleTestRequest(t *testing.T) {
 	rec := httptest.NewRecorder()
 	req, _ := http.NewRequest(http.MethodGet, "/api/users/test", nil)
 	s.handleTest().ServeHTTP(rec, req)
 	assert.Equal(t, "Test OK", rec.Body.String())
 }
 
-func TestServer_HandleRegisterRequest(t *testing.T) {
+func TestServer_handleLoginLifeCycle(t *testing.T) {
+	var user_id int
+
+	type registerUserID struct {
+		UserID int `json:"user_id"`
+	}
+
 	testCases := []struct {
 		name                 string
 		payload              interface{}
@@ -74,17 +93,131 @@ func TestServer_HandleRegisterRequest(t *testing.T) {
 	}
 
 	for _, tc := range testCases {
-		s := New(configs.NewServerConfig())
-		err := s.configureStore()
-		assert.NoError(t, err)
 		t.Run(tc.name, func(t *testing.T) {
 			rec := httptest.NewRecorder()
 			b := &bytes.Buffer{}
 			_ = json.NewEncoder(b).Encode(tc.payload)
-			req, _ := http.NewRequest(http.MethodGet, "/api/users/create", b)
+			req, _ := http.NewRequest(http.MethodPost, "/api/users/create", b)
 			s.handleRegistration().ServeHTTP(rec, req)
+			log.Printf("Response: %s", rec.Body)
+			assert.Equal(t, tc.expectedResponseCode, rec.Code)
+			if rec.Code == http.StatusCreated {
+				r := &registerUserID{}
+				_ = json.NewDecoder(rec.Body).Decode(r)
+				user_id = r.UserID
+			}
+		})
+	}
+
+	var accessToken string
+	//var refreshToken string
+
+	type loginResponse struct {
+		Access  string `json:"access"`
+		Refresh string `json:"refresh"`
+	}
+
+	var lgr loginResponse
+
+	loginTestCases := []struct {
+		name                 string
+		loginCredentials     interface{}
+		expectedResponseCode int
+	}{
+		{
+			name:                 "No Data",
+			loginCredentials:     nil,
+			expectedResponseCode: http.StatusUnauthorized,
+		},
+		{
+			name: "No Password",
+			loginCredentials: map[string]string{
+				"email": "something@gmail.com",
+			},
+			expectedResponseCode: http.StatusUnauthorized,
+		},
+		{
+			name: "No email",
+			loginCredentials: map[string]string{
+				"password": "SuPerPass15sdvs32t",
+			},
+			expectedResponseCode: http.StatusUnauthorized,
+		},
+		{
+			name: "Invalid password",
+			loginCredentials: map[string]string{
+				"email":    "something@gmail.com",
+				"password": "SuPerPass15sdvs32t",
+			},
+			expectedResponseCode: http.StatusUnauthorized,
+		},
+		{
+			name: "Invalid email address",
+			loginCredentials: map[string]string{
+				"email":    "something@gmail.ua",
+				"password": "SuPerPass123",
+			},
+			expectedResponseCode: http.StatusUnauthorized,
+		},
+		{
+			name: "Valid",
+			loginCredentials: map[string]string{
+				"email":    "something@gmail.com",
+				"password": "SuPerPass123",
+			},
+			expectedResponseCode: http.StatusOK,
+		},
+	}
+
+	for _, tc := range loginTestCases {
+		t.Run(tc.name, func(t *testing.T) {
+			rec := httptest.NewRecorder()
+			b := &bytes.Buffer{}
+			_ = json.NewEncoder(b).Encode(tc.loginCredentials)
+			req, _ := http.NewRequest(http.MethodPost, "/api/users/login", b)
+			s.handleLogin().ServeHTTP(rec, req)
+			log.Printf("Response: %s", rec.Body)
+			assert.Equal(t, tc.expectedResponseCode, rec.Code)
+			if rec.Code == http.StatusOK {
+				_ = json.NewDecoder(rec.Body).Decode(&lgr)
+				//refreshToken = lgr.Refresh
+				accessToken = lgr.Access
+			}
+		})
+	}
+
+	testCasesAsLoggedIn := []struct {
+		name                 string
+		access               interface{}
+		expectedResponseCode int
+	}{
+		{
+			name:                 "Valid",
+			access:               accessToken,
+			expectedResponseCode: http.StatusOK,
+		},
+		{
+			name:                 "No access  token",
+			access:               nil,
+			expectedResponseCode: http.StatusUnauthorized,
+		},
+		{
+			name:                 "Invalid access  token",
+			access:               accessToken + "er",
+			expectedResponseCode: http.StatusUnauthorized,
+		},
+	}
+
+	for _, tc := range testCasesAsLoggedIn {
+		t.Run(tc.name, func(t *testing.T) {
+			rec := httptest.NewRecorder()
+			b := &bytes.Buffer{}
+			req, _ := http.NewRequest(http.MethodGet, "/api/users/login", b)
+			req.Header.Set("Authorization", fmt.Sprintf("Bear %v", tc.access))
+			s.middleware.Authentication.IsAuthorised(s.handleTest()).ServeHTTP(rec, req)
 			log.Printf("Response: %s", rec.Body)
 			assert.Equal(t, tc.expectedResponseCode, rec.Code)
 		})
 	}
+
 }

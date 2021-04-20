@@ -2,11 +2,16 @@ package server
 
 import (
 	"encoding/json"
+	"errors"
 	"github.com/ArtemVovchenko/storypet-backend/internal/app/models"
 	"github.com/ArtemVovchenko/storypet-backend/internal/pkg/auth"
 	"io"
 	"net/http"
-	"strconv"
+)
+
+var (
+	errIncorrectAuthData     = errors.New("incorrect email or password")
+	errIncorrectRefreshToken = errors.New("incorrect refresh token")
 )
 
 func (s *Server) handleTest() http.HandlerFunc {
@@ -30,14 +35,14 @@ func (s *Server) handleLogin() http.HandlerFunc {
 			return
 		}
 
-		u, err := s.store.Users().FindByAccountEmail(rb.Email)
+		u, err := s.databaseStore.Users().FindByAccountEmail(rb.Email)
 		if err != nil {
-			s.Respond(w, r, http.StatusUnauthorized, map[string]string{"error": "Invalid email address or password"})
+			s.Respond(w, r, http.StatusUnauthorized, errIncorrectAuthData)
 			return
 		}
 
 		if !u.ComparePasswords(rb.Password) {
-			s.Respond(w, r, http.StatusUnauthorized, map[string]string{"error": "Invalid email address or password"})
+			s.Respond(w, r, http.StatusUnauthorized, errIncorrectAuthData)
 			return
 		}
 
@@ -47,7 +52,7 @@ func (s *Server) handleLogin() http.HandlerFunc {
 			return
 		}
 
-		if err := s.saveJWTTokens(token, u.UserID); err != nil {
+		if err := s.createAndSaveSession(token, u.UserID); err != nil {
 			s.RespondError(w, r, http.StatusInternalServerError, nil)
 			return
 		}
@@ -73,32 +78,31 @@ func (s *Server) handleRefresh() http.HandlerFunc {
 
 		refreshMeta, err := auth.ExtractRefreshMeta(rb.Refresh)
 		if err != nil {
-			s.Respond(w, r, http.StatusUnprocessableEntity, "Can not validate refresh token")
+			s.RespondError(w, r, http.StatusUnprocessableEntity, errIncorrectRefreshToken)
 			return
 		}
 
-		userIDStr, err := s.RedisStorage().Get(refreshMeta.RefreshUUID).Result()
+		userID, err := s.persistentStore.GetUserIDByRefreshUUID(refreshMeta.RefreshUUID)
 		if err != nil {
-			s.Respond(w, r, http.StatusUnprocessableEntity, "Invalid refresh token")
+			s.Respond(w, r, http.StatusUnprocessableEntity, errIncorrectRefreshToken)
 			return
 		}
 
-		deleted, err := s.RedisStorage().Del(refreshMeta.RefreshUUID).Result()
-		if err != nil || deleted == 0 {
-			s.errLogger.Println(err)
-			s.RespondError(w, r, http.StatusInternalServerError, nil)
-			return
-		}
-
-		userID, err := strconv.ParseInt(userIDStr, 10, 64)
-		token, err := auth.CreateToken(int(userID))
+		err = s.persistentStore.DeleteRefreshByUUID(refreshMeta.RefreshUUID)
 		if err != nil {
 			s.errLogger.Println(err)
 			s.RespondError(w, r, http.StatusInternalServerError, nil)
 			return
 		}
 
-		if err := s.saveJWTTokens(token, int(userID)); err != nil {
+		token, err := auth.CreateToken(userID)
+		if err != nil {
+			s.errLogger.Println(err)
+			s.RespondError(w, r, http.StatusInternalServerError, nil)
+			return
+		}
+
+		if err := s.createAndSaveSession(token, userID); err != nil {
 			s.errLogger.Println(err)
 			s.RespondError(w, r, http.StatusInternalServerError, nil)
 			return
@@ -118,12 +122,27 @@ func (s *Server) handleLogout() http.HandlerFunc {
 			s.Respond(w, r, http.StatusUnauthorized, "Unauthorized")
 			return
 		}
-		deleted, err := s.RedisStorage().Del(accessInfo.AccessUUID).Result()
-		if err != nil || deleted == 0 {
+		if err := s.deleteSession(accessInfo.AccessUUID); err != nil {
 			s.Respond(w, r, http.StatusUnauthorized, "Unauthorized")
 			return
 		}
 		s.Respond(w, r, http.StatusOK, "Logged Out")
+	}
+}
+
+func (s *Server) handleSessionInfo() http.HandlerFunc {
+	return func(w http.ResponseWriter, r *http.Request) {
+		accessInfo, err := auth.ExtractAccessMeta(r)
+		if err != nil {
+			s.Respond(w, r, http.StatusUnauthorized, "Unauthorized")
+			return
+		}
+		session, err := s.persistentStore.GetSessionInfo(accessInfo.AccessUUID)
+		if err != nil {
+			s.Respond(w, r, http.StatusUnauthorized, "Unauthorized")
+			return
+		}
+		s.Respond(w, r, http.StatusOK, session)
 	}
 }
 
@@ -153,7 +172,7 @@ func (s *Server) handleRegistration() http.HandlerFunc {
 		u.SetBackupEmail(rb.BackupEmail)
 		u.SetLocation(rb.Location)
 
-		if _, err := s.store.Users().Create(u); err != nil {
+		if _, err := s.databaseStore.Users().Create(u); err != nil {
 			s.RespondError(w, r, http.StatusUnprocessableEntity, err)
 			return
 		}

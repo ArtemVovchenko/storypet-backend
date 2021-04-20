@@ -1,62 +1,36 @@
 package store
 
 import (
-	"github.com/ArtemVovchenko/storypet-backend/internal/app/store/configs"
-	"github.com/go-redis/redis/v7"
-	"github.com/jmoiron/sqlx"
-	_ "github.com/lib/pq"
+	"github.com/ArtemVovchenko/storypet-backend/internal/app/sessions"
+	"github.com/ArtemVovchenko/storypet-backend/internal/app/store/persistentstore"
+	"github.com/ArtemVovchenko/storypet-backend/internal/app/store/repos"
+	"github.com/ArtemVovchenko/storypet-backend/internal/app/store/sqlxstore"
+	"github.com/ArtemVovchenko/storypet-backend/internal/app/store/sqlxstore/configs"
+	"time"
 )
 
-type Store struct {
-	config      *configs.DatabaseConfig
-	db          *sqlx.DB
-	redisClient *redis.Client
-
-	userRepository *UserRepository
+type DatabaseStore interface {
+	Open() error
+	Close()
+	Users() repos.UserRepository
+	Roles() repos.RoleRepository
 }
 
-func New(config *configs.DatabaseConfig) *Store {
-	return &Store{
-		config: config,
-	}
+type PersistentStore interface {
+	Open() error
+	Close()
+	SaveSessionInfo(accessUUID string, session *sessions.Session, expireTime time.Time) error
+	SaveRefreshInfo(refreshUUID string, userID int, expireTime time.Time) error
+	GetSessionInfo(accessUUID string) (*sessions.Session, error)
+	DeleteSessionInfo(accessUUID string) (*sessions.Session, error)
+	GetUserIDByRefreshUUID(refreshUUID string) (int, error)
+	DeleteRefreshByUUID(refreshUUID string) error
 }
 
-func (s *Store) Open() error {
-	db, err := sqlx.Connect("postgres", s.config.ConnectionString)
-	if err != nil {
-		return err
-	}
-
-	if err := db.Ping(); err != nil {
-		return err
-	}
-	s.db = db
-
-	s.redisClient = redis.NewClient(&redis.Options{
-		Addr: s.config.RedisDNS,
-	})
-
-	if _, err := s.redisClient.Ping().Result(); err != nil {
-		return err
-	}
-	return nil
+func NewDatabaseStore() DatabaseStore {
+	return sqlxstore.New(configs.NewDatabaseConfig())
 }
 
-func (s *Store) RedisClient() *redis.Client {
-	return s.redisClient
-}
-
-func (s *Store) Close() {
-	s.db.Close()
-	s.redisClient.Close()
-}
-
-func (s *Store) Users() *UserRepository {
-	if s.userRepository != nil {
-		return s.userRepository
-	}
-	s.userRepository = &UserRepository{
-		store: s,
-	}
-	return s.userRepository
+func NewPersistentStore() PersistentStore {
+	return persistentstore.NewRedisStore()
 }

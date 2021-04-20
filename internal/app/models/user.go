@@ -20,13 +20,6 @@ type User struct {
 	SpecifiedLocation    string          `json:"location,omitempty"`
 }
 
-type Role struct {
-	RoleID                   int             `db:"role_id" json:"role_id"`
-	RoleName                 string          `db:"name" json:"role_name"`
-	RoleDescription          *sql.NullString `db:"description" json:"-"`
-	RoleSpecifiedDescription string          `json:"role_description"`
-}
-
 func (u *User) BeforeCreate() error {
 	if len(u.Password) > 0 {
 		enc, err := encryptString(u.Password)
@@ -115,26 +108,4 @@ func encryptString(s string) (string, error) {
 	}
 
 	return string(b), nil
-}
-
-func (r *Role) BeforeCreate() {
-	if r.RoleSpecifiedDescription != "" {
-		r.RoleDescription = &sql.NullString{
-			String: r.RoleSpecifiedDescription,
-			Valid:  true,
-		}
-	} else {
-		r.RoleDescription = &sql.NullString{
-			String: "",
-			Valid:  false,
-		}
-	}
-}
-
-func (r *Role) SetDescription(description *string) {
-	if description != nil {
-		r.RoleSpecifiedDescription = *description
-	} else {
-		r.RoleSpecifiedDescription = ""
-	}
 }

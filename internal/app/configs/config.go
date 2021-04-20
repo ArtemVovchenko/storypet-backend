@@ -1,7 +1,6 @@
 package configs
 
 import (
-	database "github.com/ArtemVovchenko/storypet-backend/internal/app/store/configs"
 	"os"
 )
 
@@ -13,7 +12,6 @@ type ServerConfig struct {
 	ErrLogPrefix    string
 	ErrLogFlags     int
 	ErrLogOutStream *os.File
-	Database        *database.DatabaseConfig
 }
 
 func NewServerConfig() *ServerConfig {
@@ -25,6 +23,5 @@ func NewServerConfig() *ServerConfig {
 		ErrLogFlags:     SrvErrLogFlags,
 		ErrLogOutStream: SrvErrLogStream,
 		ErrLogPrefix:    SrvErrLogPrefix,
-		Database:        database.NewDatabaseConfig(),
 	}
 }

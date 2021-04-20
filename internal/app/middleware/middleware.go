@@ -1,7 +1,7 @@
 package middleware
 
 import (
-	"github.com/go-redis/redis/v7"
+	"github.com/ArtemVovchenko/storypet-backend/internal/app/store"
 	"net/http"
 )
 
@@ -11,7 +11,7 @@ type Middleware struct {
 
 type server interface {
 	Respond(w http.ResponseWriter, h *http.Request, code int, data interface{})
-	RedisStorage() *redis.Client
+	PersistentStore() store.PersistentStore
 }
 
 func New(server server) *Middleware {

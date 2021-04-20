@@ -3,7 +3,6 @@ package middleware
 import (
 	"github.com/ArtemVovchenko/storypet-backend/internal/pkg/auth"
 	"net/http"
-	"strconv"
 )
 
 type AuthenticationMiddleware struct {
@@ -21,17 +20,12 @@ func (m *AuthenticationMiddleware) IsAuthorised(next http.HandlerFunc) http.Hand
 			m.server.Respond(w, r, http.StatusUnauthorized, "Unauthorized")
 			return
 		}
-		redisInternalUserID, err := m.server.RedisStorage().Get(accessInfo.AccessUUID).Result()
+		session, err := m.server.PersistentStore().GetSessionInfo(accessInfo.AccessUUID)
 		if err != nil {
 			m.server.Respond(w, r, http.StatusUnauthorized, "Unauthorized")
 			return
 		}
-		verifiedID, err := strconv.ParseInt(redisInternalUserID, 10, 64)
-		if err != nil {
-			m.server.Respond(w, r, http.StatusUnauthorized, "Unauthorized")
-			return
-		}
-		if accessInfo.UserID != int(verifiedID) {
+		if accessInfo.UserID != session.UserID {
 			m.server.Respond(w, r, http.StatusUnauthorized, "Unauthorized")
 			return
 		}

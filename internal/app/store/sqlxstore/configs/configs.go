@@ -4,6 +4,5 @@ import "os"
 
 var (
 	// DbUrl is the connection string to the database
-	DbUrl    = os.Getenv("DATABASE_URL")
-	RedisDNS = os.Getenv("REDIS_DNS")
+	DbUrl = os.Getenv("DATABASE_URL")
 )

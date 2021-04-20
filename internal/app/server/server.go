@@ -4,32 +4,37 @@ import (
 	"encoding/json"
 	"github.com/ArtemVovchenko/storypet-backend/internal/app/configs"
 	"github.com/ArtemVovchenko/storypet-backend/internal/app/middleware"
+	"github.com/ArtemVovchenko/storypet-backend/internal/app/sessions"
 	"github.com/ArtemVovchenko/storypet-backend/internal/app/store"
 	"github.com/ArtemVovchenko/storypet-backend/internal/pkg/auth"
-	"github.com/go-redis/redis/v7"
 	"github.com/gorilla/mux"
 	"log"
 	"net/http"
-	"strconv"
 	"time"
 )
 
 type Server struct {
-	config     *configs.ServerConfig
-	logger     *log.Logger
-	errLogger  *log.Logger
-	router     *mux.Router
-	store      *store.Store
-	middleware *middleware.Middleware
+	config          *configs.ServerConfig
+	logger          *log.Logger
+	errLogger       *log.Logger
+	router          *mux.Router
+	databaseStore   store.DatabaseStore
+	persistentStore store.PersistentStore
+	middleware      *middleware.Middleware
 }
 
-func New(config *configs.ServerConfig) *Server {
+func New() *Server {
+	config := configs.NewServerConfig()
 	return &Server{
 		config:    config,
 		logger:    log.New(config.LogOutStream, config.LogPrefix, config.LogFlags),
 		errLogger: log.New(config.ErrLogOutStream, configs.SrvErrLogPrefix, configs.SrvErrLogFlags),
 		router:    mux.NewRouter(),
 	}
+}
+
+func (s *Server) PersistentStore() store.PersistentStore {
+	return s.persistentStore
 }
 
 func (s *Server) Start() error {
@@ -58,37 +63,89 @@ func (s *Server) configureMiddleware() {
 }
 
 func (s *Server) configureRouter() {
-	s.router.Path("/api/users/test").Methods(http.MethodGet).HandlerFunc(s.handleTest()).Name("User Test")
-	s.router.Path("/api/users/login/test").Methods(http.MethodGet).HandlerFunc(s.middleware.Authentication.IsAuthorised(s.handleTest())).Name("Authorized User Test")
+	// Test Requests
+	s.router.Path("/api/users/test").
+		Methods(http.MethodGet).
+		HandlerFunc(s.handleTest()).Name("User Test")
+	s.router.Path("/api/users/login/test").
+		Methods(http.MethodGet).
+		HandlerFunc(s.middleware.Authentication.IsAuthorised(s.handleTest())).
+		Name("Authorized User Test")
 
-	s.router.Path("/api/users/login").Methods(http.MethodPost).HandlerFunc(s.handleLogin()).Name("User Login")
-	s.router.Path("/api/users/refresh").Methods(http.MethodPost).HandlerFunc(s.handleRefresh()).Name("Refresh token")
-	s.router.Path("/api/users/logout").Methods(http.MethodPost).HandlerFunc(s.middleware.Authentication.IsAuthorised(s.handleLogout())).Name("User Logout")
-	s.router.Path("/api/users").Methods(http.MethodPost).HandlerFunc(s.handleRegistration()).Name("User Register")
+	s.router.Path("/api/users/login").
+		Methods(http.MethodPost).
+		HandlerFunc(s.handleLogin()).
+		Name("User Login")
+	s.router.Path("/api/users/refresh").
+		Methods(http.MethodPost).
+		HandlerFunc(s.handleRefresh()).
+		Name("Refresh token")
+	s.router.Path("/api/users/session").
+		Methods(http.MethodGet).
+		HandlerFunc(s.middleware.Authentication.IsAuthorised(s.handleSessionInfo())).
+		Name("Session info")
+	s.router.Path("/api/users/logout").
+		Methods(http.MethodPost).
+		HandlerFunc(s.middleware.Authentication.IsAuthorised(s.handleLogout())).
+		Name("User Logout")
+	s.router.Path("/api/users").
+		Methods(http.MethodPost).
+		HandlerFunc(s.handleRegistration()).
+		Name("User Register")
 }
 
 func (s *Server) configureStore() error {
-	st := store.New(s.config.Database)
-	if err := st.Open(); err != nil {
+	database := store.NewDatabaseStore()
+	if err := database.Open(); err != nil {
 		return err
 	}
+	s.databaseStore = database
 
-	s.store = st
+	persistentDatabase := store.NewPersistentStore()
+	if err := persistentDatabase.Open(); err != nil {
+		return err
+	}
+	s.persistentStore = persistentDatabase
 	return nil
 }
 
-func (s *Server) saveJWTTokens(tInfo *auth.TokenPairInfo, userID int) error {
-	at := time.Unix(tInfo.AccessExpires, 0)
-	rt := time.Unix(tInfo.RefreshExpires, 0)
-	if err := s.store.RedisClient().Set(tInfo.AccessUUID, strconv.Itoa(userID), at.Sub(time.Now())).Err(); err != nil {
+func (s *Server) Store() store.DatabaseStore {
+	return s.databaseStore
+}
+
+func (s *Server) createAndSaveSession(tokenPairMeta *auth.TokenPairInfo, userID int) error {
+	userRoles, _ := s.databaseStore.Roles().SelectUserRoles(userID)
+	newSession := &sessions.Session{
+		UserID:      userID,
+		RefreshUUID: tokenPairMeta.RefreshUUID,
+		Roles:       userRoles,
+	}
+	return s.saveSession(tokenPairMeta, newSession)
+}
+
+func (s *Server) deleteSession(accessUUID string) error {
+	session, err := s.persistentStore.DeleteSessionInfo(accessUUID)
+	if err != nil {
 		return err
 	}
-	if err := s.store.RedisClient().Set(tInfo.RefreshUUID, strconv.Itoa(userID), rt.Sub(time.Now())).Err(); err != nil {
+	if err := s.persistentStore.DeleteRefreshByUUID(session.RefreshUUID); err != nil {
 		return err
 	}
 	return nil
 }
 
-func (s *Server) RedisStorage() *redis.Client {
-	return s.store.RedisClient()
+func (s *Server) saveSession(tokenPairInfo *auth.TokenPairInfo, session *sessions.Session) error {
+	if err := s.persistentStore.SaveSessionInfo(
+		tokenPairInfo.AccessUUID,
+		session,
+		time.Unix(tokenPairInfo.AccessExpires, 0)); err != nil {
+		return err
+	}
+	if err := s.persistentStore.SaveRefreshInfo(
+		tokenPairInfo.RefreshUUID,
+		session.UserID,
+		time.Unix(tokenPairInfo.RefreshExpires, 0)); err != nil {
+		return err
+	}
+	return nil
 }

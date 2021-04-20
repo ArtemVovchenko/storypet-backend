@@ -1,9 +1,11 @@
-package store
+package sqlxstore
 
-import "github.com/ArtemVovchenko/storypet-backend/internal/app/models"
+import (
+	"github.com/ArtemVovchenko/storypet-backend/internal/app/models"
+)
 
 type UserRepository struct {
-	store *Store
+	store *PostgreDatabaseStore
 }
 
 func (r *UserRepository) Create(u *models.User) (*models.User, error) {
@@ -94,16 +96,4 @@ func (r *UserRepository) FindByID(id int) (*models.User, error) {
 		return nil, err
 	}
 	return userEntity, nil
-}
-
-func (r *UserRepository) SelectUserRoleIDs(userID int) ([]models.Role, error) {
-	var roles []models.Role
-	if err := r.store.db.Select(
-		&roles,
-		`SELECT * FROM roles WHERE role_id IN (SELECT role_id FROM user_roles WHERE user_id = $1)`,
-		userID,
-	); err != nil {
-		return nil, err
-	}
-	return roles, nil
 }
