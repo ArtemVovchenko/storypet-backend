@@ -15,5 +15,8 @@ func (r *RoleRepository) SelectUserRoles(userID int) ([]models.Role, error) {
 	); err != nil {
 		return nil, err
 	}
+	for idx := range roles {
+		roles[idx].CheckNullableData()
+	}
 	return roles, nil
 }

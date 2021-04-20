@@ -30,6 +30,12 @@ func (r *Role) BeforeCreate() {
 	}
 }
 
+func (r *Role) CheckNullableData() {
+	if r.RoleDescription.Valid {
+		r.RoleSpecifiedDescription = r.RoleDescription.String
+	}
+}
+
 func (r *Role) SetDescription(description *string) {
 	if description != nil {
 		r.RoleSpecifiedDescription = *description
