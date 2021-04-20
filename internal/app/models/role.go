@@ -6,7 +6,7 @@ type Role struct {
 	RoleID                   int             `db:"role_id" json:"role_id"`
 	RoleName                 string          `db:"name" json:"role_name"`
 	RoleDescription          *sql.NullString `db:"description" json:"-"`
-	RoleSpecifiedDescription string          `json:"role_description"`
+	RoleSpecifiedDescription string          `json:"role_description,omitempty"`
 	AllowRolesCrud           bool            `db:"allow_roles_crud" json:"allow_roles_crud"`
 	AllowUsersCrud           bool            `db:"allow_users_crud" json:"allow_users_crud"`
 	AllowVeterinariansCrud   bool            `db:"allow_veterinarians_crud" json:"allow_veterinarians_crud"`

@@ -56,6 +56,15 @@ func (u *User) BeforeCreate() error {
 	return nil
 }
 
+func (u *User) CheckNullableData() {
+	if u.BackupEmail.Valid {
+		u.SpecifiedBackupEmail = u.BackupEmail.String
+	}
+	if u.Location.Valid {
+		u.SpecifiedLocation = u.Location.String
+	}
+}
+
 func (u *User) SetLocation(location *string) {
 	if location != nil {
 		u.SpecifiedLocation = *location
