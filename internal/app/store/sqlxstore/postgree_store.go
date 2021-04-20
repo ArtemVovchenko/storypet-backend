@@ -15,7 +15,8 @@ type PostgreDatabaseStore struct {
 	roleRepository *RoleRepository
 }
 
-func New(config *configs.DatabaseConfig) *PostgreDatabaseStore {
+func NewPostgreDatabaseStore() *PostgreDatabaseStore {
+	config := configs.NewDatabaseConfig()
 	return &PostgreDatabaseStore{
 		config: config,
 	}

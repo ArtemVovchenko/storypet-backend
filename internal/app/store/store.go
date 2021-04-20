@@ -5,7 +5,6 @@ import (
 	"github.com/ArtemVovchenko/storypet-backend/internal/app/store/persistentstore"
 	"github.com/ArtemVovchenko/storypet-backend/internal/app/store/repos"
 	"github.com/ArtemVovchenko/storypet-backend/internal/app/store/sqlxstore"
-	"github.com/ArtemVovchenko/storypet-backend/internal/app/store/sqlxstore/configs"
 	"time"
 )
 
@@ -28,7 +27,7 @@ type PersistentStore interface {
 }
 
 func NewDatabaseStore() DatabaseStore {
-	return sqlxstore.New(configs.NewDatabaseConfig())
+	return sqlxstore.NewPostgreDatabaseStore()
 }
 
 func NewPersistentStore() PersistentStore {
