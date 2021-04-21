@@ -1,38 +1,35 @@
 package store
 
 import (
-	"github.com/ArtemVovchenko/storypet-backend/internal/app/configs"
-	"github.com/jmoiron/sqlx"
-	_ "github.com/lib/pq"
-	"log"
+	"github.com/ArtemVovchenko/storypet-backend/internal/app/sessions"
+	"github.com/ArtemVovchenko/storypet-backend/internal/app/store/persistentstore"
+	"github.com/ArtemVovchenko/storypet-backend/internal/app/store/repos"
+	"github.com/ArtemVovchenko/storypet-backend/internal/app/store/sqlxstore"
+	"time"
 )
 
-type Store struct {
-	config *configs.DatabaseConfig
-	db     *sqlx.DB
+type DatabaseStore interface {
+	Open() error
+	Close()
+	Users() repos.UserRepository
+	Roles() repos.RoleRepository
 }
 
-func New(config *configs.DatabaseConfig) *Store {
-	return &Store{
-		config: config,
-	}
+type PersistentStore interface {
+	Open() error
+	Close()
+	SaveSessionInfo(accessUUID string, session *sessions.Session, expireTime time.Time) error
+	SaveRefreshInfo(refreshUUID string, userID int, expireTime time.Time) error
+	GetSessionInfo(accessUUID string) (*sessions.Session, error)
+	DeleteSessionInfo(accessUUID string) (*sessions.Session, error)
+	GetUserIDByRefreshUUID(refreshUUID string) (int, error)
+	DeleteRefreshByUUID(refreshUUID string) error
 }
 
-func (s *Store) Open() error {
-	db, err := sqlx.Connect("postgres", s.config.ConnectionString)
-	if err != nil {
-		return err
-	}
-
-	if err := db.Ping(); err != nil {
-		return err
-	}
-	s.db = db
-	return nil
+func NewDatabaseStore() DatabaseStore {
+	return sqlxstore.NewPostgreDatabaseStore()
 }
 
-func (s Store) Close(logger *log.Logger) {
-	if err := s.db.Close(); err != nil {
-		logger.Printf("Error while closing the database %s", err)
-	}
+func NewPersistentStore() PersistentStore {
+	return persistentstore.NewRedisStore()
 }

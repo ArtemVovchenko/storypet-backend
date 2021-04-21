@@ -5,29 +5,23 @@ import (
 )
 
 type ServerConfig struct {
-	BindAddr     string
-	LogPrefix    string
-	LogFlags     int
-	LogOutStream *os.File
-	Database     *DatabaseConfig
-}
-
-type DatabaseConfig struct {
-	ConnectionString string
+	BindAddr        string
+	LogPrefix       string
+	LogFlags        int
+	LogOutStream    *os.File
+	ErrLogPrefix    string
+	ErrLogFlags     int
+	ErrLogOutStream *os.File
 }
 
 func NewServerConfig() *ServerConfig {
 	return &ServerConfig{
-		BindAddr:     SrvPort,
-		LogPrefix:    SrvLogPrefix,
-		LogFlags:     SrvLogFlags,
-		LogOutStream: SrvLogStream,
-		Database:     newDatabaseConfig(),
-	}
-}
-
-func newDatabaseConfig() *DatabaseConfig {
-	return &DatabaseConfig{
-		ConnectionString: DbUrl,
+		BindAddr:        SrvPort,
+		LogPrefix:       SrvLogPrefix,
+		LogFlags:        SrvLogFlags,
+		LogOutStream:    SrvLogStream,
+		ErrLogFlags:     SrvErrLogFlags,
+		ErrLogOutStream: SrvErrLogStream,
+		ErrLogPrefix:    SrvErrLogPrefix,
 	}
 }
