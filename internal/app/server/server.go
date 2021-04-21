@@ -33,10 +33,6 @@ func New() *Server {
 	}
 }
 
-func (s *Server) PersistentStore() store.PersistentStore {
-	return s.persistentStore
-}
-
 func (s *Server) Start() error {
 	s.configureMiddleware()
 	s.configureRouter()
@@ -45,6 +41,10 @@ func (s *Server) Start() error {
 	}
 	s.logger.Println("starting server")
 	return http.ListenAndServe(s.config.BindAddr, s.router)
+}
+
+func (s *Server) PersistentStore() store.PersistentStore {
+	return s.persistentStore
 }
 
 func (s *Server) RespondError(w http.ResponseWriter, r *http.Request, statusCode int, err error) {
@@ -66,32 +66,81 @@ func (s *Server) configureRouter() {
 	// Test Requests
 	s.router.Path("/api/users/test").
 		Methods(http.MethodGet).
-		HandlerFunc(s.handleTest()).Name("User Test")
+		Name("User Test").
+		HandlerFunc(
+			s.handleTest(),
+		)
 	s.router.Path("/api/users/login/test").
+		Name("Authorized User Test").
 		Methods(http.MethodGet).
-		HandlerFunc(s.middleware.Authentication.IsAuthorised(s.handleTest())).
-		Name("Authorized User Test")
+		HandlerFunc(
+			s.middleware.ResponseWriting.JSONBody(
+				s.middleware.Authentication.IsAuthorised(
+					s.handleTest(),
+				),
+			),
+		)
+	s.router.Path("/api/users/login/test/admin").
+		Name("Authorized User Test").
+		Methods(http.MethodGet).
+		HandlerFunc(
+			s.middleware.ResponseWriting.JSONBody(
+				s.middleware.AccessPermission.FullAccess(
+					s.middleware.Authentication.IsAuthorised(
+						s.handleTest(),
+					),
+				),
+			),
+		)
 
 	s.router.Path("/api/users/login").
+		Name("User Login").
 		Methods(http.MethodPost).
-		HandlerFunc(s.handleLogin()).
-		Name("User Login")
+		HandlerFunc(
+			s.middleware.ResponseWriting.JSONBody(
+				s.handleLogin(),
+			),
+		)
+
 	s.router.Path("/api/users/refresh").
+		Name("Refresh token").
 		Methods(http.MethodPost).
-		HandlerFunc(s.handleRefresh()).
-		Name("Refresh token")
+		HandlerFunc(
+			s.middleware.ResponseWriting.JSONBody(
+				s.handleRefresh(),
+			),
+		)
+
 	s.router.Path("/api/users/session").
+		Name("Session info").
 		Methods(http.MethodGet).
-		HandlerFunc(s.middleware.Authentication.IsAuthorised(s.handleSessionInfo())).
-		Name("Session info")
+		HandlerFunc(
+			s.middleware.ResponseWriting.JSONBody(
+				s.middleware.Authentication.IsAuthorised(
+					s.handleSessionInfo(),
+				),
+			),
+		)
+
 	s.router.Path("/api/users/logout").
+		Name("User Logout").
 		Methods(http.MethodPost).
-		HandlerFunc(s.middleware.Authentication.IsAuthorised(s.handleLogout())).
-		Name("User Logout")
+		HandlerFunc(
+			s.middleware.ResponseWriting.JSONBody(
+				s.middleware.Authentication.IsAuthorised(
+					s.handleLogout(),
+				),
+			),
+		)
+
 	s.router.Path("/api/users").
+		Name("User Register").
 		Methods(http.MethodPost).
-		HandlerFunc(s.handleRegistration()).
-		Name("User Register")
+		HandlerFunc(
+			s.middleware.ResponseWriting.JSONBody(
+				s.handleRegistration(),
+			),
+		)
 }
 
 func (s *Server) configureStore() error {
@@ -107,10 +156,6 @@ func (s *Server) configureStore() error {
 	}
 	s.persistentStore = persistentDatabase
 	return nil
-}
-
-func (s *Server) Store() store.DatabaseStore {
-	return s.databaseStore
 }
 
 func (s *Server) createAndSaveSession(tokenPairMeta *auth.TokenPairInfo, userID int) error {

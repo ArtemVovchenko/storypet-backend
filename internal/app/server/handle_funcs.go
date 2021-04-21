@@ -5,7 +5,6 @@ import (
 	"errors"
 	"github.com/ArtemVovchenko/storypet-backend/internal/app/models"
 	"github.com/ArtemVovchenko/storypet-backend/internal/pkg/auth"
-	"io"
 	"net/http"
 )
 
@@ -16,8 +15,7 @@ var (
 
 func (s *Server) handleTest() http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
-		_, err := io.WriteString(w, "Test OK")
-		if err != nil {
+		if err := json.NewEncoder(w).Encode(map[string]string{"Status": "Test OK"}); err != nil {
 			s.logger.Printf("Error processing request at `/api/users/test`: %s", err)
 		}
 	}

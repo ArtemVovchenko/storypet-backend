@@ -1,6 +1,9 @@
 package models
 
-import "database/sql"
+import (
+	"database/sql"
+	"reflect"
+)
 
 type Role struct {
 	RoleID                   int             `db:"role_id" json:"role_id"`
@@ -14,6 +17,23 @@ type Role struct {
 	AllowFoodCrud            bool            `db:"allow_food_crud" json:"allow_food_crud"`
 	AllowPetsCrud            bool            `db:"allow_pets_crud" json:"allow_pets_crud"`
 	AllowDatabaseDump        bool            `db:"allow_database_dump" json:"allow_database_dump"`
+}
+
+type Permission struct {
+	Name string
+}
+
+// Permissions MUST HAVE all the bool permission fields of
+// models.Role structure. Any change of Permissions set must be updated
+// in permissions package
+type Permissions struct {
+	RolesPermission         Permission
+	UsersPermission         Permission
+	VeterinariansPermission Permission
+	VaccinesPermission      Permission
+	FoodPermission          Permission
+	PetsPermission          Permission
+	DatabasePermission      Permission
 }
 
 func (r *Role) BeforeCreate() {
@@ -41,5 +61,35 @@ func (r *Role) SetDescription(description *string) {
 		r.RoleSpecifiedDescription = *description
 	} else {
 		r.RoleSpecifiedDescription = ""
+	}
+}
+
+func (r Role) HasAllPermission(permissions ...Permission) bool {
+	for _, perm := range permissions {
+		if !reflect.ValueOf(r).FieldByName(perm.Name).Bool() {
+			return false
+		}
+	}
+	return true
+}
+
+func (r Role) HasAnyPermission(permissions ...Permission) bool {
+	for _, perm := range permissions {
+		if reflect.ValueOf(r).FieldByName(perm.Name).Bool() {
+			return true
+		}
+	}
+	return false
+}
+
+func RolePermissions() *Permissions {
+	return &Permissions{
+		RolesPermission:         Permission{"AllowRolesCrud"},
+		UsersPermission:         Permission{"AllowUsersCrud"},
+		VeterinariansPermission: Permission{"AllowVeterinariansCrud"},
+		VaccinesPermission:      Permission{"AllowVaccinesCrud"},
+		FoodPermission:          Permission{"AllowFoodCrud"},
+		PetsPermission:          Permission{"AllowPetsCrud"},
+		DatabasePermission:      Permission{"AllowDatabaseDump"},
 	}
 }

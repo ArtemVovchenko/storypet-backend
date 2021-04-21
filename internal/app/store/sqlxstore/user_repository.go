@@ -2,6 +2,7 @@ package sqlxstore
 
 import (
 	"github.com/ArtemVovchenko/storypet-backend/internal/app/models"
+	"github.com/jmoiron/sqlx"
 )
 
 type UserRepository struct {
@@ -21,7 +22,9 @@ func (r *UserRepository) Create(u *models.User) (*models.User, error) {
 	if err != nil {
 		return nil, err
 	}
-	defer transaction.Rollback()
+	defer func(transaction *sqlx.Tx) {
+		_ = transaction.Rollback()
+	}(transaction)
 
 	_, err = transaction.NamedExec(`INSERT INTO users (account_email, password_sha256, username, full_name, backup_email, location)
 		VALUES (:account_email, :password_sha256, :username, :full_name, :backup_email, :location) RETURNING user_id`, *u)
@@ -34,7 +37,7 @@ func (r *UserRepository) Create(u *models.User) (*models.User, error) {
 		return nil, err
 	}
 
-	_, err = transaction.Exec(`INSERT INTO user_roles (user_id, role_id) VALUES ($1, (SELECT DISTINCT role_id FROM roles WHERE name = 'unsubscribed'))`,
+	_, err = transaction.Exec(`INSERT INTO user_roles (user_id, role_id) VALUES ($1, (SELECT DISTINCT default_user_role_id FROM config LIMIT 1))`,
 		u.UserID,
 	)
 	if err != nil {

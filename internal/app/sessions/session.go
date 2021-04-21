@@ -1,6 +1,8 @@
 package sessions
 
-import "github.com/ArtemVovchenko/storypet-backend/internal/app/models"
+import (
+	"github.com/ArtemVovchenko/storypet-backend/internal/app/models"
+)
 
 type Session struct {
 	UserID      int           `json:"user_id"`

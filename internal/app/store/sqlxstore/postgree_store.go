@@ -5,6 +5,7 @@ import (
 	"github.com/ArtemVovchenko/storypet-backend/internal/app/store/sqlxstore/configs"
 	"github.com/jmoiron/sqlx"
 	_ "github.com/lib/pq"
+	"os/exec"
 )
 
 type PostgreDatabaseStore struct {
@@ -56,4 +57,8 @@ func (s *PostgreDatabaseStore) Roles() repos.RoleRepository {
 		store: s,
 	}
 	return s.roleRepository
+}
+
+func (s *PostgreDatabaseStore) MakeDump() {
+	exec.Command("pg_dump", "")
 }
