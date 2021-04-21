@@ -5,7 +5,6 @@ import (
 	"github.com/ArtemVovchenko/storypet-backend/internal/app/sessions"
 	"github.com/ArtemVovchenko/storypet-backend/internal/app/store/persistentstore/configs"
 	"github.com/go-redis/redis/v7"
-	"log"
 	"strconv"
 	"time"
 )
@@ -21,10 +20,7 @@ func NewRedisStore() *RedisStore {
 }
 
 func (s *RedisStore) Open() error {
-	addr, err := redis.ParseURL(configs.RedisURL)
-	if err != nil {
-		log.Fatalln(err)
-	}
+	addr, _ := redis.ParseURL(configs.RedisURL)
 	client := redis.NewClient(addr)
 	if err := client.Ping().Err(); err != nil {
 		return err

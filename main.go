@@ -5,7 +5,6 @@ import (
 	"log"
 )
 
-// Starts the server
 func main() {
 	s := server.New()
 	log.Fatal(s.Start())
