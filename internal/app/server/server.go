@@ -146,7 +146,11 @@ func (s *Server) configureRouter() {
 		Name("Make Database Dump").
 		Methods(http.MethodGet).
 		HandlerFunc(
-			s.handleMakingDump(),
+			s.middleware.Authentication.IsAuthorised(
+				s.middleware.AccessPermission.DatabaseAccess(
+					s.handleMakingDump(),
+				),
+			),
 		)
 }
 

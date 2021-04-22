@@ -3,9 +3,12 @@ package server
 import (
 	"encoding/json"
 	"errors"
+	"fmt"
 	"github.com/ArtemVovchenko/storypet-backend/internal/app/models"
 	"github.com/ArtemVovchenko/storypet-backend/internal/pkg/auth"
 	"net/http"
+	"os"
+	"strings"
 )
 
 var (
@@ -182,10 +185,18 @@ func (s *Server) handleRegistration() http.HandlerFunc {
 
 func (s *Server) handleMakingDump() http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
-		if err := s.databaseStore.MakeDump(); err != nil {
+		filePath, err := s.databaseStore.MakeDump()
+		if err != nil {
 			s.errLogger.Printf("Database Dump failed: %s", err)
 			s.RespondError(w, r, http.StatusInternalServerError, errDatabaseDumpFailed)
 		}
-		s.Respond(w, r, http.StatusOK, "Dump Created")
+		w.Header().Set("Content-Type", "application/octet-stream")
+		filePathValues := strings.Split(filePath, "/")
+		fileName := filePathValues[len(filePathValues)-1]
+		w.Header().Set("Content-Disposition", fmt.Sprintf("attachment; filename=%s", fileName))
+		http.ServeFile(w, r, filePath)
+		if _, err := os.Stat(filePath); err == nil {
+			_ = os.Remove(filePath)
+		}
 	}
 }

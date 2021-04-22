@@ -14,7 +14,7 @@ type DatabaseStore interface {
 	Users() repos.UserRepository
 	Roles() repos.RoleRepository
 
-	MakeDump() error
+	MakeDump() (string, error)
 }
 
 type PersistentStore interface {

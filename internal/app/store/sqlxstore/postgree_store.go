@@ -1,16 +1,15 @@
 package sqlxstore
 
 import (
-	"bytes"
 	"fmt"
 	"github.com/ArtemVovchenko/storypet-backend/internal/app/store/repos"
 	"github.com/ArtemVovchenko/storypet-backend/internal/app/store/sqlxstore/configs"
 	"github.com/ArtemVovchenko/storypet-backend/internal/pkg/url"
 	"github.com/jmoiron/sqlx"
 	_ "github.com/lib/pq"
+	"github.com/twinj/uuid"
 	"os"
 	"os/exec"
-	"time"
 )
 
 type PostgreDatabaseStore struct {
@@ -68,23 +67,26 @@ func (s *PostgreDatabaseStore) Roles() repos.RoleRepository {
 	return s.roleRepository
 }
 
-func (s *PostgreDatabaseStore) MakeDump() error {
+func (s *PostgreDatabaseStore) MakeDump() (string, error) {
 	psqlConnectionAddr := s.config.ConnectionString
 
 	workDir, err := os.Getwd()
 	if err != nil {
-		return err
+		return "", err
 	}
-	migrationFileName := fmt.Sprintf("%s_dump.sql", time.Now().Format("02.01.2006:15:04:05"))
-	migrationFilePath := workDir + "/local/" + migrationFileName
+	fileUUID := uuid.NewV4().String()
+	migrationFileName := fmt.Sprintf("%s-dump.sql", fileUUID)
 
-	var out bytes.Buffer
-	var stderr bytes.Buffer
-	cmd := exec.Command("pg_dump", psqlConnectionAddr, "-f", migrationFilePath)
-	cmd.Stdout = &out
-	cmd.Stderr = &stderr
-	if err := cmd.Run(); err != nil {
-		return err
+	if _, err := os.Stat(workDir + configs.TmpDumpFiles); os.IsNotExist(err) {
+		if err := os.MkdirAll(workDir+configs.TmpDumpFiles, os.ModePerm); err != nil {
+			return "", err
+		}
 	}
-	return nil
+	migrationFilePath := workDir + configs.TmpDumpFiles + migrationFileName
+
+	cmd := exec.Command("pg_dump", psqlConnectionAddr, "--column-inserts", "-f", migrationFilePath)
+	if err := cmd.Run(); err != nil {
+		return "", err
+	}
+	return migrationFilePath, nil
 }
