@@ -20,7 +20,10 @@ func NewRedisStore() *RedisStore {
 }
 
 func (s *RedisStore) Open() error {
-	addr, _ := redis.ParseURL(configs.RedisURL)
+	addr, err := redis.ParseURL(configs.RedisURL)
+	if err != nil {
+		return err
+	}
 	client := redis.NewClient(addr)
 	if err := client.Ping().Err(); err != nil {
 		return err

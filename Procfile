@@ -1,1 +1,1 @@
-web: bin/storypet
+web: bin/storypet-backend
