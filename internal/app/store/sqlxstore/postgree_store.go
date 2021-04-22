@@ -1,11 +1,17 @@
 package sqlxstore
 
 import (
+	"bytes"
+	"fmt"
 	"github.com/ArtemVovchenko/storypet-backend/internal/app/store/repos"
 	"github.com/ArtemVovchenko/storypet-backend/internal/app/store/sqlxstore/configs"
+	"github.com/ArtemVovchenko/storypet-backend/internal/pkg/url"
 	"github.com/jmoiron/sqlx"
 	_ "github.com/lib/pq"
+	"log"
+	"os"
 	"os/exec"
+	"time"
 )
 
 type PostgreDatabaseStore struct {
@@ -24,7 +30,11 @@ func NewPostgreDatabaseStore() *PostgreDatabaseStore {
 }
 
 func (s *PostgreDatabaseStore) Open() error {
-	db, err := sqlx.Connect("postgres", s.config.ConnectionString)
+	dbDriverConnectionString, err := url.ParsePostgreConn(s.config.ConnectionString)
+	if err != nil {
+		return err
+	}
+	db, err := sqlx.Connect("postgres", dbDriverConnectionString)
 	if err != nil {
 		return err
 	}
@@ -36,7 +46,7 @@ func (s *PostgreDatabaseStore) Open() error {
 }
 
 func (s *PostgreDatabaseStore) Close() {
-	s.db.Close()
+	_ = s.db.Close()
 }
 
 func (s *PostgreDatabaseStore) Users() repos.UserRepository {
@@ -60,5 +70,28 @@ func (s *PostgreDatabaseStore) Roles() repos.RoleRepository {
 }
 
 func (s *PostgreDatabaseStore) MakeDump() {
-	exec.Command("pg_dump", "")
+	psqlConnectionAddr := s.config.ConnectionString
+
+	workDir, err := os.Getwd()
+	if err != nil {
+		panic(err)
+	}
+	migrationFileName := fmt.Sprintf("%s_dump.sql", time.Now().Format("02.01.2006:15:04:05"))
+	migrationFilePath := workDir + "/local/" + migrationFileName
+
+	var out bytes.Buffer
+	var stderr bytes.Buffer
+	cmd := exec.Command("pg_dump", psqlConnectionAddr, "-f", migrationFilePath)
+	cmd.Stdout = &out
+	cmd.Stderr = &stderr
+	go func() {
+		err := cmd.Run()
+
+		if err != nil {
+			log.Printf("Error Occured %s: %s", err, stderr.String())
+		}
+	}()
+	//if err := cmd.Run(); err != nil {
+	//	log.Fatalln(err)
+	//}
 }

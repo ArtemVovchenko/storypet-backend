@@ -178,3 +178,10 @@ func (s *Server) handleRegistration() http.HandlerFunc {
 		s.Respond(w, r, http.StatusCreated, u)
 	}
 }
+
+func (s *Server) handleMakingDump() http.HandlerFunc {
+	return func(w http.ResponseWriter, r *http.Request) {
+		s.databaseStore.MakeDump()
+		s.Respond(w, r, http.StatusOK, "Dump Created")
+	}
+}

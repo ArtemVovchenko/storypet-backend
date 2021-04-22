@@ -13,6 +13,8 @@ type DatabaseStore interface {
 	Close()
 	Users() repos.UserRepository
 	Roles() repos.RoleRepository
+
+	MakeDump()
 }
 
 type PersistentStore interface {

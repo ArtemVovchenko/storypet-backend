@@ -51,7 +51,7 @@ func (s *Server) RespondError(w http.ResponseWriter, r *http.Request, statusCode
 	s.Respond(w, r, statusCode, map[string]string{"error": err.Error()})
 }
 
-func (s *Server) Respond(w http.ResponseWriter, r *http.Request, statusCode int, data interface{}) {
+func (s *Server) Respond(w http.ResponseWriter, _ *http.Request, statusCode int, data interface{}) {
 	w.WriteHeader(statusCode)
 	if data != nil {
 		_ = json.NewEncoder(w).Encode(data)
@@ -140,6 +140,13 @@ func (s *Server) configureRouter() {
 			s.middleware.ResponseWriting.JSONBody(
 				s.handleRegistration(),
 			),
+		)
+
+	s.router.Path("/api/database/dump").
+		Name("Make Database Dump").
+		Methods(http.MethodGet).
+		HandlerFunc(
+			s.handleMakingDump(),
 		)
 }
 
