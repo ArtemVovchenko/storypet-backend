@@ -8,7 +8,6 @@ import (
 	"github.com/ArtemVovchenko/storypet-backend/internal/pkg/url"
 	"github.com/jmoiron/sqlx"
 	_ "github.com/lib/pq"
-	"log"
 	"os"
 	"os/exec"
 	"time"
@@ -69,12 +68,12 @@ func (s *PostgreDatabaseStore) Roles() repos.RoleRepository {
 	return s.roleRepository
 }
 
-func (s *PostgreDatabaseStore) MakeDump() {
+func (s *PostgreDatabaseStore) MakeDump() error {
 	psqlConnectionAddr := s.config.ConnectionString
 
 	workDir, err := os.Getwd()
 	if err != nil {
-		panic(err)
+		return err
 	}
 	migrationFileName := fmt.Sprintf("%s_dump.sql", time.Now().Format("02.01.2006:15:04:05"))
 	migrationFilePath := workDir + "/local/" + migrationFileName
@@ -84,14 +83,8 @@ func (s *PostgreDatabaseStore) MakeDump() {
 	cmd := exec.Command("pg_dump", psqlConnectionAddr, "-f", migrationFilePath)
 	cmd.Stdout = &out
 	cmd.Stderr = &stderr
-	go func() {
-		err := cmd.Run()
-
-		if err != nil {
-			log.Printf("Error Occured %s: %s", err, stderr.String())
-		}
-	}()
-	//if err := cmd.Run(); err != nil {
-	//	log.Fatalln(err)
-	//}
+	if err := cmd.Run(); err != nil {
+		return err
+	}
+	return nil
 }
