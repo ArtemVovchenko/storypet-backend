@@ -7,6 +7,7 @@ import (
 	"github.com/ArtemVovchenko/storypet-backend/internal/pkg/filesutil"
 	"github.com/jmoiron/sqlx"
 	"github.com/twinj/uuid"
+	"io/ioutil"
 	"os/exec"
 	"time"
 )
@@ -83,7 +84,14 @@ func (r *DumpRepository) Make(savePath string) error {
 	return nil
 }
 
-func (r *DumpRepository) Execute(dumpQueries string) error {
+func (r *DumpRepository) Execute(dumpFilePath string) error {
+	dumpFileContent, err := ioutil.ReadFile(dumpFilePath)
+	if err != nil {
+		r.store.logger.Println(err)
+		return err
+	}
+	dumpQueries := string(dumpFileContent)
+
 	transaction, err := r.store.db.Beginx()
 	if err != nil {
 		r.store.logger.Println(err)
@@ -101,6 +109,10 @@ func (r *DumpRepository) Execute(dumpQueries string) error {
 		return err
 	}
 	if _, err := transaction.Exec(dumpQueries); err != nil {
+		r.store.logger.Println(err)
+		return err
+	}
+	if _, err := transaction.Exec(`TRUNCATE public.database_dumps;`); err != nil {
 		r.store.logger.Println(err)
 		return err
 	}

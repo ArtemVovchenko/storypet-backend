@@ -2,6 +2,7 @@ package filesutil
 
 import (
 	"os"
+	"path"
 	"path/filepath"
 )
 
@@ -38,4 +39,18 @@ func ExtractFileName(filePath string) string {
 
 func CreateDir(dirPath string) error {
 	return os.MkdirAll(dirPath, os.ModePerm)
+}
+
+func ClearDir(dirPath string) error {
+	files, err := os.ReadDir(dirPath)
+	if err != nil {
+		return err
+	}
+	for _, file := range files {
+		err := os.RemoveAll(path.Join(dirPath, file.Name()))
+		if err != nil {
+			return err
+		}
+	}
+	return nil
 }

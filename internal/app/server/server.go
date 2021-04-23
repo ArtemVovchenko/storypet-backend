@@ -188,7 +188,7 @@ func (s *Server) configureRouter() {
 
 	s.router.Path("/api/database/dump/{fileName}").
 		Name("Make Database Dump").
-		Methods(http.MethodGet, http.MethodDelete).
+		Methods(http.MethodGet, http.MethodPut, http.MethodDelete).
 		HandlerFunc(
 			s.middleware.ResponseWriting.JSONBody(
 				s.middleware.Authentication.IsAuthorised(
