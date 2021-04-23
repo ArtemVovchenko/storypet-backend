@@ -10,6 +10,7 @@ import (
 	"github.com/gorilla/mux"
 	"log"
 	"net/http"
+	"os"
 	"time"
 )
 
@@ -148,9 +149,11 @@ func (s *Server) configureRouter() {
 		Name("Make Database Dump").
 		Methods(http.MethodGet).
 		HandlerFunc(
-			s.middleware.Authentication.IsAuthorised(
-				s.middleware.AccessPermission.DatabaseAccess(
-					s.handleMakingDump(),
+			s.middleware.ResponseWriting.JSONBody(
+				s.middleware.Authentication.IsAuthorised(
+					s.middleware.AccessPermission.DatabaseAccess(
+						s.handleMakingDump(),
+					),
 				),
 			),
 		)
@@ -168,7 +171,8 @@ func (s *Server) configureRouter() {
 }
 
 func (s *Server) configureStore() error {
-	database := store.NewDatabaseStore()
+	databaseLogger := log.New(os.Stdout, "DATABASE: ", log.LstdFlags)
+	database := store.NewDatabaseStore(databaseLogger)
 	if err := database.Open(); err != nil {
 		return err
 	}

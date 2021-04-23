@@ -5,6 +5,7 @@ import (
 	"github.com/ArtemVovchenko/storypet-backend/internal/app/store/persistentstore"
 	"github.com/ArtemVovchenko/storypet-backend/internal/app/store/repos"
 	"github.com/ArtemVovchenko/storypet-backend/internal/app/store/sqlxstore"
+	"log"
 	"time"
 )
 
@@ -13,9 +14,7 @@ type DatabaseStore interface {
 	Close()
 	Users() repos.UserRepository
 	Roles() repos.RoleRepository
-
-	MakeDump() (string, error)
-	ExecuteDump(dumpQueries string) error
+	Dumps() repos.DumpRepository
 }
 
 type PersistentStore interface {
@@ -29,8 +28,8 @@ type PersistentStore interface {
 	DeleteRefreshByUUID(refreshUUID string) error
 }
 
-func NewDatabaseStore() DatabaseStore {
-	return sqlxstore.NewPostgreDatabaseStore()
+func NewDatabaseStore(logger *log.Logger) DatabaseStore {
+	return sqlxstore.NewPostgreDatabaseStore(logger)
 }
 
 func NewPersistentStore() PersistentStore {

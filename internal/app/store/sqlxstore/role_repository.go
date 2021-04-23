@@ -13,6 +13,7 @@ func (r *RoleRepository) SelectUserRoles(userID int) ([]models.Role, error) {
 		`SELECT * FROM public.roles WHERE role_id IN (SELECT role_id FROM public.user_roles WHERE user_id = $1)`,
 		userID,
 	); err != nil {
+		r.store.logger.Println(err)
 		return nil, err
 	}
 	for idx := range roles {

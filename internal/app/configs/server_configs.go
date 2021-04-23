@@ -20,5 +20,8 @@ var (
 
 func getCWD() string {
 	cwd, _ := os.Getwd()
+	if cwd[len(cwd)-1] != '/' {
+		return cwd + "/"
+	}
 	return cwd
 }

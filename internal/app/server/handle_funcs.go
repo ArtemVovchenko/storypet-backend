@@ -3,12 +3,9 @@ package server
 import (
 	"encoding/json"
 	"errors"
-	"fmt"
 	"github.com/ArtemVovchenko/storypet-backend/internal/app/models"
 	"github.com/ArtemVovchenko/storypet-backend/internal/pkg/auth"
 	"net/http"
-	"os"
-	"strings"
 )
 
 var (
@@ -185,19 +182,11 @@ func (s *Server) handleRegistration() http.HandlerFunc {
 
 func (s *Server) handleMakingDump() http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
-		filePath, err := s.databaseStore.MakeDump()
-		if err != nil {
-			s.errLogger.Printf("Database Dump failed: %s", err)
-			s.RespondError(w, r, http.StatusInternalServerError, errDatabaseDumpFailed)
+		if err := s.databaseStore.Dumps().MakeDump(s.config.DatabaseDumpsDir); err != nil {
+			s.RespondError(w, r, http.StatusServiceUnavailable, errDatabaseDumpFailed)
+			return
 		}
-		w.Header().Set("Content-Type", "application/octet-stream")
-		filePathValues := strings.Split(filePath, "/")
-		fileName := filePathValues[len(filePathValues)-1]
-		w.Header().Set("Content-Disposition", fmt.Sprintf("attachment; filename=%s", fileName))
-		http.ServeFile(w, r, filePath)
-		if _, err := os.Stat(filePath); err == nil {
-			_ = os.Remove(filePath)
-		}
+		s.Respond(w, r, http.StatusOK, nil)
 	}
 }
 
@@ -211,7 +200,7 @@ func (s *Server) handleExecutingDump() http.HandlerFunc {
 			s.RespondError(w, r, http.StatusBadRequest, err)
 			return
 		}
-		if err := s.databaseStore.ExecuteDump(rb.DumpContent); err != nil {
+		if err := s.databaseStore.Dumps().ExecuteDump(rb.DumpContent); err != nil {
 			s.RespondError(w, r, http.StatusUnprocessableEntity, err)
 			return
 		}

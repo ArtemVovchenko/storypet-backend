@@ -1,7 +1,7 @@
 .idea
 
+dumps
 tmp/
-*sql
 
 # Default ignored files
 /shelf/

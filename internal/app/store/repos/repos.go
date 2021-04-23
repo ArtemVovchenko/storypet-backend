@@ -12,3 +12,8 @@ type UserRepository interface {
 type RoleRepository interface {
 	SelectUserRoles(userID int) ([]models.Role, error)
 }
+
+type DumpRepository interface {
+	MakeDump(savePath string) error
+	ExecuteDump(dumpQueries string) error
+}
