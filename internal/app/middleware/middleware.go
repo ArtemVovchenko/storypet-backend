@@ -17,8 +17,8 @@ type server interface {
 	PersistentStore() store.PersistentStore
 }
 
-func New(server server) *Middleware {
-	return &Middleware{
+func New(server server) Middleware {
+	return Middleware{
 		Authentication:   newAuthentication(server),
 		ResponseWriting:  NewResponseWriterMiddleware(server),
 		AccessPermission: NewAccessPermissionMiddleware(server),

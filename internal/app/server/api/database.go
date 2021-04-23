@@ -17,6 +17,47 @@ func NewDatabaseAPI(server server) *DatabaseAPI {
 	return &DatabaseAPI{server: server}
 }
 
+func (a *DatabaseAPI) ConfigureRoutes(router *mux.Router) {
+	router.Path("/api/database/dump/make").
+		Name("Make Database Dump").
+		Methods(http.MethodGet).
+		HandlerFunc(
+			a.server.Middleware().ResponseWriting.JSONBody(
+				a.server.Middleware().Authentication.IsAuthorised(
+					a.server.Middleware().AccessPermission.DatabaseAccess(
+						a.ServeDumpingRequest,
+					),
+				),
+			),
+		)
+
+	router.Path("/api/database/dump").
+		Name("Make Database Dump").
+		Methods(http.MethodGet).
+		Handler(
+			a.server.Middleware().ResponseWriting.JSONBody(
+				a.server.Middleware().Authentication.IsAuthorised(
+					a.server.Middleware().AccessPermission.DatabaseAccess(
+						a.ServeEmptyRequest,
+					),
+				),
+			),
+		)
+
+	router.Path("/api/database/dump/{fileName}").
+		Name("Make Database Dump").
+		Methods(http.MethodGet, http.MethodPut, http.MethodDelete).
+		Handler(
+			a.server.Middleware().ResponseWriting.JSONBody(
+				a.server.Middleware().Authentication.IsAuthorised(
+					a.server.Middleware().AccessPermission.DatabaseAccess(
+						a.ServeRequestByDumpName,
+					),
+				),
+			),
+		)
+}
+
 func (a *DatabaseAPI) ServeEmptyRequest(w http.ResponseWriter, r *http.Request) {
 	dumpFiles, err := a.server.DatabaseStore().Dumps().SelectAll()
 	if err != nil {
