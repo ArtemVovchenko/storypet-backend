@@ -164,7 +164,7 @@ func (s *Server) configureRouter() {
 			s.middleware.ResponseWriting.JSONBody(
 				s.middleware.Authentication.IsAuthorised(
 					s.middleware.AccessPermission.DatabaseAccess(
-						s.handleMakingDump(),
+						s.databaseAPI.ServeDumpingRequest,
 					),
 				),
 			),

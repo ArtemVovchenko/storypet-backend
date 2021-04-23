@@ -1,10 +1,13 @@
 package api
 
 import (
+	"errors"
 	"github.com/ArtemVovchenko/storypet-backend/internal/pkg/filesutil"
 	"github.com/gorilla/mux"
 	"net/http"
 )
+
+var errDatabaseDumpFailed = errors.New("could not create database dump")
 
 type DatabaseAPI struct {
 	server server
@@ -59,4 +62,12 @@ func (a *DatabaseAPI) ServeRequestByDumpName(w http.ResponseWriter, r *http.Requ
 		filesutil.Delete(dumpFile.FilePath)
 		a.server.Respond(w, r, http.StatusNoContent, dumpFile)
 	}
+}
+
+func (a *DatabaseAPI) ServeDumpingRequest(w http.ResponseWriter, r *http.Request) {
+	if err := a.server.DatabaseStore().Dumps().Make(a.server.DumpFilesFolder()); err != nil {
+		a.server.RespondError(w, r, http.StatusServiceUnavailable, errDatabaseDumpFailed)
+		return
+	}
+	a.server.Respond(w, r, http.StatusOK, nil)
 }

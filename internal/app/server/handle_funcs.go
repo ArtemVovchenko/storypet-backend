@@ -11,7 +11,6 @@ import (
 var (
 	errIncorrectAuthData     = errors.New("incorrect email or password")
 	errIncorrectRefreshToken = errors.New("incorrect refresh token")
-	errDatabaseDumpFailed    = errors.New("could not create database dump")
 )
 
 func (s *Server) handleTest() http.HandlerFunc {
@@ -177,15 +176,5 @@ func (s *Server) handleRegistration() http.HandlerFunc {
 		}
 		u.Sanitise()
 		s.Respond(w, r, http.StatusCreated, u)
-	}
-}
-
-func (s *Server) handleMakingDump() http.HandlerFunc {
-	return func(w http.ResponseWriter, r *http.Request) {
-		if err := s.databaseStore.Dumps().Make(s.config.DatabaseDumpsDir); err != nil {
-			s.RespondError(w, r, http.StatusServiceUnavailable, errDatabaseDumpFailed)
-			return
-		}
-		s.Respond(w, r, http.StatusOK, nil)
 	}
 }
