@@ -49,7 +49,11 @@ func (s *Server) PersistentStore() store.PersistentStore {
 }
 
 func (s *Server) RespondError(w http.ResponseWriter, r *http.Request, statusCode int, err error) {
-	s.Respond(w, r, statusCode, map[string]string{"error": err.Error()})
+	if err != nil {
+		s.Respond(w, r, statusCode, map[string]string{"error": err.Error()})
+	} else {
+		s.Respond(w, r, statusCode, err)
+	}
 }
 
 func (s *Server) Respond(w http.ResponseWriter, _ *http.Request, statusCode int, data interface{}) {
@@ -177,6 +181,19 @@ func (s *Server) configureRouter() {
 				s.middleware.Authentication.IsAuthorised(
 					s.middleware.AccessPermission.DatabaseAccess(
 						s.handleSelectingAllDumps(),
+					),
+				),
+			),
+		)
+
+	s.router.Path("/api/database/dump/{fileName}").
+		Name("Make Database Dump").
+		Methods(http.MethodGet).
+		HandlerFunc(
+			s.middleware.ResponseWriting.JSONBody(
+				s.middleware.Authentication.IsAuthorised(
+					s.middleware.AccessPermission.DatabaseAccess(
+						s.handleSelectDumpByName(),
 					),
 				),
 			),

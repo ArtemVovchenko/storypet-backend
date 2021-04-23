@@ -21,7 +21,7 @@ with all public schema definitions and stored data.
 
 It accepts the folder, where created dump would be saved.
 */
-func (r *DumpRepository) MakeDump(savePath string) error {
+func (r *DumpRepository) Make(savePath string) error {
 	psqlConnectionAddr := r.store.config.ConnectionString
 	fileUUID := uuid.NewV4().String()
 	migrationFileName := fmt.Sprintf("%s-dump.sql", fileUUID)
@@ -83,7 +83,7 @@ func (r *DumpRepository) MakeDump(savePath string) error {
 	return nil
 }
 
-func (r *DumpRepository) ExecuteDump(dumpQueries string) error {
+func (r *DumpRepository) Execute(dumpQueries string) error {
 	transaction, err := r.store.db.Beginx()
 	if err != nil {
 		r.store.logger.Println(err)
@@ -111,7 +111,7 @@ func (r *DumpRepository) ExecuteDump(dumpQueries string) error {
 	return nil
 }
 
-func (r *DumpRepository) SelectAllDumps() ([]models.Dump, error) {
+func (r *DumpRepository) SelectAll() ([]models.Dump, error) {
 	var dumps []models.Dump
 	if err := r.store.db.Select(
 		&dumps,
@@ -124,4 +124,17 @@ func (r *DumpRepository) SelectAllDumps() ([]models.Dump, error) {
 		dumps[idx].AfterCreate()
 	}
 	return dumps, nil
+}
+
+func (r *DumpRepository) SelectByName(dumpFileName string) (*models.Dump, error) {
+	dumpFile := &models.Dump{}
+	if err := r.store.db.Get(dumpFile,
+		`SELECT * FROM public.database_dumps WHERE dump_filepath LIKE $1;`,
+		"%"+dumpFileName,
+	); err != nil {
+		r.store.logger.Println(err)
+		return nil, err
+	}
+	dumpFile.AfterCreate()
+	return dumpFile, nil
 }

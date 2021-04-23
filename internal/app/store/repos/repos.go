@@ -14,7 +14,8 @@ type RoleRepository interface {
 }
 
 type DumpRepository interface {
-	MakeDump(savePath string) error
-	ExecuteDump(dumpQueries string) error
-	SelectAllDumps() ([]models.Dump, error)
+	Make(savePath string) error
+	Execute(dumpQueries string) error
+	SelectAll() ([]models.Dump, error)
+	SelectByName(dumpFileName string) (*models.Dump, error)
 }
