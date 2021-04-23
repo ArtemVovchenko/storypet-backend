@@ -10,7 +10,7 @@ func (r *RoleRepository) SelectUserRoles(userID int) ([]models.Role, error) {
 	var roles []models.Role
 	if err := r.store.db.Select(
 		&roles,
-		`SELECT * FROM roles WHERE role_id IN (SELECT role_id FROM user_roles WHERE user_id = $1)`,
+		`SELECT * FROM public.roles WHERE role_id IN (SELECT role_id FROM public.user_roles WHERE user_id = $1)`,
 		userID,
 	); err != nil {
 		return nil, err

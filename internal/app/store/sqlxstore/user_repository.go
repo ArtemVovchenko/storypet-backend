@@ -1,6 +1,7 @@
 package sqlxstore
 
 import (
+	"database/sql"
 	"github.com/ArtemVovchenko/storypet-backend/internal/app/models"
 	"github.com/jmoiron/sqlx"
 )
@@ -26,18 +27,18 @@ func (r *UserRepository) Create(u *models.User) (*models.User, error) {
 		_ = transaction.Rollback()
 	}(transaction)
 
-	_, err = transaction.NamedExec(`INSERT INTO users (account_email, password_sha256, username, full_name, backup_email, location)
+	_, err = transaction.NamedExec(`INSERT INTO public.users (account_email, password_sha256, username, full_name, backup_email, location)
 		VALUES (:account_email, :password_sha256, :username, :full_name, :backup_email, :location) RETURNING user_id`, *u)
 	if err != nil {
 		return nil, err
 	}
 
-	err = transaction.Get(u, `SELECT user_id FROM users WHERE account_email = $1`, u.AccountEmail)
+	err = transaction.Get(u, `SELECT user_id FROM public.users WHERE account_email = $1`, u.AccountEmail)
 	if err != nil {
 		return nil, err
 	}
 
-	_, err = transaction.Exec(`INSERT INTO user_roles (user_id, role_id) VALUES ($1, (SELECT DISTINCT default_user_role_id FROM config LIMIT 1))`,
+	_, err = transaction.Exec(`INSERT INTO public.user_roles (user_id, role_id) VALUES ($1, (SELECT DISTINCT default_user_role_id FROM public.config LIMIT 1))`,
 		u.UserID,
 	)
 	if err != nil {
@@ -63,9 +64,12 @@ func (r *UserRepository) DeleteByID(id int) (*models.User, error) {
 	if err != nil {
 		return nil, err
 	}
-	defer transaction.Rollback()
+	defer func(transaction *sql.Tx) {
+		_ = transaction.Rollback()
+		// TODO: Log the Rollback error
+	}(transaction)
 
-	_, err = transaction.Exec(`DELETE FROM users WHERE user_id = $1`, userModel.UserID)
+	_, err = transaction.Exec(`DELETE FROM public.users WHERE user_id = $1`, userModel.UserID)
 	if err != nil {
 		return nil, err
 	}
@@ -81,7 +85,7 @@ func (r *UserRepository) DeleteByID(id int) (*models.User, error) {
 func (r *UserRepository) FindByAccountEmail(email string) (*models.User, error) {
 	userEntity := &models.User{}
 	if err := r.store.db.Get(userEntity,
-		`SELECT * FROM users WHERE account_email = $1 LIMIT 1`,
+		`SELECT * FROM public.users WHERE account_email = $1 LIMIT 1`,
 		email,
 	); err != nil {
 		return nil, err
@@ -93,7 +97,7 @@ func (r *UserRepository) FindByAccountEmail(email string) (*models.User, error) 
 func (r *UserRepository) FindByID(id int) (*models.User, error) {
 	userEntity := &models.User{}
 	if err := r.store.db.Get(userEntity,
-		`SELECT * FROM users WHERE user_id = $1`,
+		`SELECT * FROM public.users WHERE user_id = $1`,
 		id,
 	); err != nil {
 		return nil, err
