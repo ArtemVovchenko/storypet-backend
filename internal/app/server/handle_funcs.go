@@ -207,3 +207,14 @@ func (s *Server) handleExecutingDump() http.HandlerFunc {
 		s.Respond(w, r, http.StatusOK, nil)
 	}
 }
+
+func (s *Server) handleSelectingAllDumps() http.HandlerFunc {
+	return func(w http.ResponseWriter, r *http.Request) {
+		dumpFiles, err := s.databaseStore.Dumps().SelectAllDumps()
+		if err != nil {
+			s.RespondError(w, r, http.StatusInternalServerError, err)
+			return
+		}
+		s.Respond(w, r, http.StatusOK, dumpFiles)
+	}
+}

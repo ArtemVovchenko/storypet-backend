@@ -168,6 +168,19 @@ func (s *Server) configureRouter() {
 				),
 			),
 		)
+
+	s.router.Path("/api/database/dump").
+		Name("Make Database Dump").
+		Methods(http.MethodGet).
+		HandlerFunc(
+			s.middleware.ResponseWriting.JSONBody(
+				s.middleware.Authentication.IsAuthorised(
+					s.middleware.AccessPermission.DatabaseAccess(
+						s.handleSelectingAllDumps(),
+					),
+				),
+			),
+		)
 }
 
 func (s *Server) configureStore() error {

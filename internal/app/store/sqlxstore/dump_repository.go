@@ -110,3 +110,18 @@ func (r *DumpRepository) ExecuteDump(dumpQueries string) error {
 	}
 	return nil
 }
+
+func (r *DumpRepository) SelectAllDumps() ([]models.Dump, error) {
+	var dumps []models.Dump
+	if err := r.store.db.Select(
+		&dumps,
+		`SELECT * FROM public.database_dumps ORDER BY created_at DESC;`,
+	); err != nil {
+		r.store.logger.Println(err)
+		return nil, err
+	}
+	for idx := range dumps {
+		dumps[idx].AfterCreate()
+	}
+	return dumps, nil
+}
