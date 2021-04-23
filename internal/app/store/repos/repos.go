@@ -18,4 +18,5 @@ type DumpRepository interface {
 	Execute(dumpQueries string) error
 	SelectAll() ([]models.Dump, error)
 	SelectByName(dumpFileName string) (*models.Dump, error)
+	DeleteByName(dumpFileName string) (*models.Dump, error)
 }

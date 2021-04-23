@@ -5,6 +5,7 @@ import (
 	"errors"
 	"github.com/ArtemVovchenko/storypet-backend/internal/app/models"
 	"github.com/ArtemVovchenko/storypet-backend/internal/pkg/auth"
+	"github.com/ArtemVovchenko/storypet-backend/internal/pkg/filesutil"
 	"github.com/gorilla/mux"
 	"net/http"
 )
@@ -220,14 +221,29 @@ func (s *Server) handleSelectingAllDumps() http.HandlerFunc {
 	}
 }
 
-func (s *Server) handleSelectDumpByName() http.HandlerFunc {
+func (s *Server) handleRequestByDumpName() http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
-		dumpFileName := mux.Vars(r)["fileName"]
-		dumpFile, err := s.databaseStore.Dumps().SelectByName(dumpFileName)
-		if err != nil {
-			s.RespondError(w, r, http.StatusNotFound, nil)
-			return
+
+		switch r.Method {
+		case http.MethodGet:
+			dumpFileName := mux.Vars(r)["fileName"]
+			dumpFile, err := s.databaseStore.Dumps().SelectByName(dumpFileName)
+			if err != nil {
+				s.RespondError(w, r, http.StatusNotFound, nil)
+				return
+			}
+			s.Respond(w, r, http.StatusOK, dumpFile)
+
+		case http.MethodDelete:
+			dumpFileName := mux.Vars(r)["fileName"]
+			dumpFile, err := s.databaseStore.Dumps().DeleteByName(dumpFileName)
+			if err != nil {
+				s.RespondError(w, r, http.StatusNotFound, nil)
+				return
+			}
+			filesutil.Delete(dumpFile.FilePath)
+			s.Respond(w, r, http.StatusNoContent, dumpFile)
 		}
-		s.Respond(w, r, http.StatusOK, dumpFile)
+
 	}
 }

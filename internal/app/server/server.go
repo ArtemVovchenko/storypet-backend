@@ -188,12 +188,12 @@ func (s *Server) configureRouter() {
 
 	s.router.Path("/api/database/dump/{fileName}").
 		Name("Make Database Dump").
-		Methods(http.MethodGet).
+		Methods(http.MethodGet, http.MethodDelete).
 		HandlerFunc(
 			s.middleware.ResponseWriting.JSONBody(
 				s.middleware.Authentication.IsAuthorised(
 					s.middleware.AccessPermission.DatabaseAccess(
-						s.handleSelectDumpByName(),
+						s.handleRequestByDumpName(),
 					),
 				),
 			),

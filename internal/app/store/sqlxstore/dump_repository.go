@@ -138,3 +138,20 @@ func (r *DumpRepository) SelectByName(dumpFileName string) (*models.Dump, error)
 	dumpFile.AfterCreate()
 	return dumpFile, nil
 }
+
+func (r *DumpRepository) DeleteByName(dumpFileName string) (*models.Dump, error) {
+	dumpFile, err := r.SelectByName(dumpFileName)
+	if err != nil {
+		r.store.logger.Println(err)
+		return nil, err
+	}
+
+	if _, err := r.store.db.Exec(
+		`DELETE FROM public.database_dumps WHERE dump_filepath LIKE $1`,
+		"%"+dumpFileName,
+	); err != nil {
+		r.store.logger.Println(err)
+		return nil, err
+	}
+	return dumpFile, nil
+}
