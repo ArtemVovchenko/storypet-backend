@@ -3,12 +3,11 @@ package server
 import (
 	"encoding/json"
 	"errors"
-	"fmt"
 	"github.com/ArtemVovchenko/storypet-backend/internal/app/models"
 	"github.com/ArtemVovchenko/storypet-backend/internal/pkg/auth"
+	"github.com/ArtemVovchenko/storypet-backend/internal/pkg/filesutil"
+	"github.com/gorilla/mux"
 	"net/http"
-	"os"
-	"strings"
 )
 
 var (
@@ -185,36 +184,69 @@ func (s *Server) handleRegistration() http.HandlerFunc {
 
 func (s *Server) handleMakingDump() http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
-		filePath, err := s.databaseStore.MakeDump()
-		if err != nil {
-			s.errLogger.Printf("Database Dump failed: %s", err)
-			s.RespondError(w, r, http.StatusInternalServerError, errDatabaseDumpFailed)
+		if err := s.databaseStore.Dumps().Make(s.config.DatabaseDumpsDir); err != nil {
+			s.RespondError(w, r, http.StatusServiceUnavailable, errDatabaseDumpFailed)
+			return
 		}
-		w.Header().Set("Content-Type", "application/octet-stream")
-		filePathValues := strings.Split(filePath, "/")
-		fileName := filePathValues[len(filePathValues)-1]
-		w.Header().Set("Content-Disposition", fmt.Sprintf("attachment; filename=%s", fileName))
-		http.ServeFile(w, r, filePath)
-		if _, err := os.Stat(filePath); err == nil {
-			_ = os.Remove(filePath)
-		}
+		s.Respond(w, r, http.StatusOK, nil)
 	}
 }
 
 func (s *Server) handleExecutingDump() http.HandlerFunc {
-	type requestBody struct {
-		DumpContent string `json:"dump_content"`
-	}
 	return func(w http.ResponseWriter, r *http.Request) {
-		rb := &requestBody{}
-		if err := json.NewDecoder(r.Body).Decode(rb); err != nil {
-			s.RespondError(w, r, http.StatusBadRequest, err)
+
+	}
+}
+
+func (s *Server) handleSelectingAllDumps() http.HandlerFunc {
+	return func(w http.ResponseWriter, r *http.Request) {
+		dumpFiles, err := s.databaseStore.Dumps().SelectAll()
+		if err != nil {
+			s.RespondError(w, r, http.StatusInternalServerError, err)
 			return
 		}
-		if err := s.databaseStore.ExecuteDump(rb.DumpContent); err != nil {
-			s.RespondError(w, r, http.StatusUnprocessableEntity, err)
-			return
+		s.Respond(w, r, http.StatusOK, dumpFiles)
+	}
+}
+
+func (s *Server) handleRequestByDumpName() http.HandlerFunc {
+	return func(w http.ResponseWriter, r *http.Request) {
+		dumpFileName := mux.Vars(r)["fileName"]
+		switch r.Method {
+		case http.MethodGet:
+			if !filesutil.Exist(s.config.DatabaseDumpsDir + dumpFileName) {
+				s.RespondError(w, r, http.StatusNotFound, nil)
+				return
+			}
+			dumpFile, err := s.databaseStore.Dumps().SelectByName(dumpFileName)
+			if err != nil {
+				s.RespondError(w, r, http.StatusNotFound, nil)
+				return
+			}
+			s.Respond(w, r, http.StatusOK, dumpFile)
+
+		case http.MethodPut:
+			if !filesutil.Exist(s.config.DatabaseDumpsDir + dumpFileName) {
+				s.RespondError(w, r, http.StatusNotFound, nil)
+				return
+			}
+			if err := s.databaseStore.Dumps().Execute(s.config.DatabaseDumpsDir + dumpFileName); err != nil {
+				s.RespondError(w, r, http.StatusInternalServerError, nil)
+				return
+			}
+			if err := filesutil.ClearDir(s.config.DatabaseDumpsDir); err != nil {
+				s.errLogger.Println(err)
+			}
+			s.Respond(w, r, http.StatusOK, map[string]string{"Status": "Succeed rollback"})
+
+		case http.MethodDelete:
+			dumpFile, err := s.databaseStore.Dumps().DeleteByName(dumpFileName)
+			if err != nil {
+				s.RespondError(w, r, http.StatusNotFound, nil)
+				return
+			}
+			filesutil.Delete(dumpFile.FilePath)
+			s.Respond(w, r, http.StatusNoContent, dumpFile)
 		}
-		s.Respond(w, r, http.StatusOK, nil)
 	}
 }

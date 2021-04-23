@@ -10,6 +10,7 @@ import (
 	"github.com/gorilla/mux"
 	"log"
 	"net/http"
+	"os"
 	"time"
 )
 
@@ -47,8 +48,16 @@ func (s *Server) PersistentStore() store.PersistentStore {
 	return s.persistentStore
 }
 
+func (s *Server) DatabaseStore() store.DatabaseStore {
+	return s.databaseStore
+}
+
 func (s *Server) RespondError(w http.ResponseWriter, r *http.Request, statusCode int, err error) {
-	s.Respond(w, r, statusCode, map[string]string{"error": err.Error()})
+	if err != nil {
+		s.Respond(w, r, statusCode, map[string]string{"error": err.Error()})
+	} else {
+		s.Respond(w, r, statusCode, err)
+	}
 }
 
 func (s *Server) Respond(w http.ResponseWriter, _ *http.Request, statusCode int, data interface{}) {
@@ -148,9 +157,11 @@ func (s *Server) configureRouter() {
 		Name("Make Database Dump").
 		Methods(http.MethodGet).
 		HandlerFunc(
-			s.middleware.Authentication.IsAuthorised(
-				s.middleware.AccessPermission.DatabaseAccess(
-					s.handleMakingDump(),
+			s.middleware.ResponseWriting.JSONBody(
+				s.middleware.Authentication.IsAuthorised(
+					s.middleware.AccessPermission.DatabaseAccess(
+						s.handleMakingDump(),
+					),
 				),
 			),
 		)
@@ -165,10 +176,37 @@ func (s *Server) configureRouter() {
 				),
 			),
 		)
+
+	s.router.Path("/api/database/dump").
+		Name("Make Database Dump").
+		Methods(http.MethodGet).
+		HandlerFunc(
+			s.middleware.ResponseWriting.JSONBody(
+				s.middleware.Authentication.IsAuthorised(
+					s.middleware.AccessPermission.DatabaseAccess(
+						s.handleSelectingAllDumps(),
+					),
+				),
+			),
+		)
+
+	s.router.Path("/api/database/dump/{fileName}").
+		Name("Make Database Dump").
+		Methods(http.MethodGet, http.MethodPut, http.MethodDelete).
+		HandlerFunc(
+			s.middleware.ResponseWriting.JSONBody(
+				s.middleware.Authentication.IsAuthorised(
+					s.middleware.AccessPermission.DatabaseAccess(
+						s.handleRequestByDumpName(),
+					),
+				),
+			),
+		)
 }
 
 func (s *Server) configureStore() error {
-	database := store.NewDatabaseStore()
+	databaseLogger := log.New(os.Stdout, "DATABASE: ", log.LstdFlags)
+	database := store.NewDatabaseStore(databaseLogger)
 	if err := database.Open(); err != nil {
 		return err
 	}

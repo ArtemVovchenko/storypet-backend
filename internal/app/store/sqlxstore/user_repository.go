@@ -12,29 +12,36 @@ type UserRepository struct {
 
 func (r *UserRepository) Create(u *models.User) (*models.User, error) {
 	if err := u.Validate(); err != nil {
+		r.store.logger.Println(err)
 		return nil, err
 	}
 
 	if err := u.BeforeCreate(); err != nil {
+		r.store.logger.Println(err)
 		return nil, err
 	}
 
 	transaction, err := r.store.db.Beginx()
 	if err != nil {
+		r.store.logger.Println(err)
 		return nil, err
 	}
 	defer func(transaction *sqlx.Tx) {
-		_ = transaction.Rollback()
+		if err := transaction.Rollback(); err != nil {
+			r.store.logger.Println(err)
+		}
 	}(transaction)
 
 	_, err = transaction.NamedExec(`INSERT INTO public.users (account_email, password_sha256, username, full_name, backup_email, location)
 		VALUES (:account_email, :password_sha256, :username, :full_name, :backup_email, :location) RETURNING user_id`, *u)
 	if err != nil {
+		r.store.logger.Println(err)
 		return nil, err
 	}
 
 	err = transaction.Get(u, `SELECT user_id FROM public.users WHERE account_email = $1`, u.AccountEmail)
 	if err != nil {
+		r.store.logger.Println(err)
 		return nil, err
 	}
 
@@ -42,11 +49,13 @@ func (r *UserRepository) Create(u *models.User) (*models.User, error) {
 		u.UserID,
 	)
 	if err != nil {
+		r.store.logger.Println(err)
 		return nil, err
 	}
 
 	err = transaction.Commit()
 	if err != nil {
+		r.store.logger.Println(err)
 		return nil, err
 	}
 
@@ -57,6 +66,7 @@ func (r *UserRepository) DeleteByID(id int) (*models.User, error) {
 	userModel := &models.User{}
 
 	if err := r.store.db.Get(userModel, `SELECT * FROM users WHERE  user_id = $1`, id); err != nil {
+		r.store.logger.Println(err)
 		return nil, err
 	}
 
@@ -65,17 +75,21 @@ func (r *UserRepository) DeleteByID(id int) (*models.User, error) {
 		return nil, err
 	}
 	defer func(transaction *sql.Tx) {
-		_ = transaction.Rollback()
-		// TODO: Log the Rollback error
+		if err := transaction.Rollback(); err != nil {
+			r.store.logger.Println(err)
+		}
+
 	}(transaction)
 
 	_, err = transaction.Exec(`DELETE FROM public.users WHERE user_id = $1`, userModel.UserID)
 	if err != nil {
+		r.store.logger.Println(err)
 		return nil, err
 	}
 
 	err = transaction.Commit()
 	if err != nil {
+		r.store.logger.Println(err)
 		return nil, err
 	}
 
@@ -88,6 +102,7 @@ func (r *UserRepository) FindByAccountEmail(email string) (*models.User, error) 
 		`SELECT * FROM public.users WHERE account_email = $1 LIMIT 1`,
 		email,
 	); err != nil {
+		r.store.logger.Println(err)
 		return nil, err
 	}
 
@@ -100,6 +115,7 @@ func (r *UserRepository) FindByID(id int) (*models.User, error) {
 		`SELECT * FROM public.users WHERE user_id = $1`,
 		id,
 	); err != nil {
+		r.store.logger.Println(err)
 		return nil, err
 	}
 	return userEntity, nil

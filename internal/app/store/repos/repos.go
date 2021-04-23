@@ -12,3 +12,11 @@ type UserRepository interface {
 type RoleRepository interface {
 	SelectUserRoles(userID int) ([]models.Role, error)
 }
+
+type DumpRepository interface {
+	Make(savePath string) error
+	Execute(dumpFilePath string) error
+	SelectAll() ([]models.Dump, error)
+	SelectByName(dumpFileName string) (*models.Dump, error)
+	DeleteByName(dumpFileName string) (*models.Dump, error)
+}
