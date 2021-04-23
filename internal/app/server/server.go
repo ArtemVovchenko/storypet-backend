@@ -142,7 +142,7 @@ func (s *Server) configureRouter() {
 			),
 		)
 
-	s.router.Path("/api/database/dump").
+	s.router.Path("/api/database/dump/make").
 		Name("Make Database Dump").
 		Methods(http.MethodGet).
 		HandlerFunc(
