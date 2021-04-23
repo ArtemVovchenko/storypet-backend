@@ -12,6 +12,8 @@ type ServerConfig struct {
 	ErrLogPrefix    string
 	ErrLogFlags     int
 	ErrLogOutStream *os.File
+
+	DatabaseDumpsDir string
 }
 
 func NewServerConfig() *ServerConfig {
@@ -23,5 +25,7 @@ func NewServerConfig() *ServerConfig {
 		ErrLogFlags:     SrvErrLogFlags,
 		ErrLogOutStream: SrvErrLogStream,
 		ErrLogPrefix:    SrvErrLogPrefix,
+
+		DatabaseDumpsDir: DatabaseDumpsDir,
 	}
 }

@@ -14,4 +14,11 @@ var (
 	SrvErrLogStream = os.Stderr
 	SrvErrLogFlags  = log.Llongfile | log.LstdFlags
 	SrvErrLogPrefix = "ERR:"
+
+	DatabaseDumpsDir = getCWD() + os.Getenv("DATABASE_DUMP_DIR")
 )
+
+func getCWD() string {
+	cwd, _ := os.Getwd()
+	return cwd
+}
