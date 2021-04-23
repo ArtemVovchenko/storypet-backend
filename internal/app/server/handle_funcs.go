@@ -200,3 +200,21 @@ func (s *Server) handleMakingDump() http.HandlerFunc {
 		}
 	}
 }
+
+func (s *Server) handleExecutingDump() http.HandlerFunc {
+	type requestBody struct {
+		DumpContent string `json:"dump_content"`
+	}
+	return func(w http.ResponseWriter, r *http.Request) {
+		rb := &requestBody{}
+		if err := json.NewDecoder(r.Body).Decode(rb); err != nil {
+			s.RespondError(w, r, http.StatusBadRequest, err)
+			return
+		}
+		if err := s.databaseStore.ExecuteDump(rb.DumpContent); err != nil {
+			s.RespondError(w, r, http.StatusUnprocessableEntity, err)
+			return
+		}
+		s.Respond(w, r, http.StatusOK, nil)
+	}
+}

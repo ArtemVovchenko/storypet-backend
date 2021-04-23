@@ -93,6 +93,7 @@ func (s *Server) configureRouter() {
 			),
 		)
 
+	// User Authentication
 	s.router.Path("/api/users/login").
 		Name("User Login").
 		Methods(http.MethodPost).
@@ -142,6 +143,7 @@ func (s *Server) configureRouter() {
 			),
 		)
 
+	// Database APIs
 	s.router.Path("/api/database/dump/make").
 		Name("Make Database Dump").
 		Methods(http.MethodGet).
@@ -149,6 +151,17 @@ func (s *Server) configureRouter() {
 			s.middleware.Authentication.IsAuthorised(
 				s.middleware.AccessPermission.DatabaseAccess(
 					s.handleMakingDump(),
+				),
+			),
+		)
+
+	s.router.Path("/api/database/dump/exec").
+		Name("Make Database Dump").
+		Methods(http.MethodPost).
+		HandlerFunc(
+			s.middleware.Authentication.IsAuthorised(
+				s.middleware.AccessPermission.DatabaseAccess(
+					s.handleExecutingDump(),
 				),
 			),
 		)

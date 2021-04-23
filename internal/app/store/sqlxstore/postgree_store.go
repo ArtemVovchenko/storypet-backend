@@ -90,3 +90,27 @@ func (s *PostgreDatabaseStore) MakeDump() (string, error) {
 	}
 	return migrationFilePath, nil
 }
+
+func (s *PostgreDatabaseStore) ExecuteDump(dumpQueries string) error {
+	transaction, err := s.db.Beginx()
+	if err != nil {
+		return err
+	}
+	defer func(transaction *sqlx.Tx) {
+		// TODO: log the potential rollback error
+		_ = transaction.Rollback()
+	}(transaction)
+	if _, err := transaction.Exec(
+		`DROP SCHEMA IF EXISTS public CASCADE;
+			   CREATE SCHEMA IF NOT EXISTS public;`,
+	); err != nil {
+		return err
+	}
+	if _, err := transaction.Exec(dumpQueries); err != nil {
+		return err
+	}
+	if err := transaction.Commit(); err != nil {
+		return err
+	}
+	return nil
+}

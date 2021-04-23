@@ -15,6 +15,7 @@ type DatabaseStore interface {
 	Roles() repos.RoleRepository
 
 	MakeDump() (string, error)
+	ExecuteDump(dumpQueries string) error
 }
 
 type PersistentStore interface {
