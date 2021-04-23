@@ -192,12 +192,6 @@ func (s *Server) handleMakingDump() http.HandlerFunc {
 	}
 }
 
-func (s *Server) handleExecutingDump() http.HandlerFunc {
-	return func(w http.ResponseWriter, r *http.Request) {
-
-	}
-}
-
 func (s *Server) handleSelectingAllDumps() http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
 		dumpFiles, err := s.databaseStore.Dumps().SelectAll()

@@ -4,6 +4,7 @@ import (
 	"encoding/json"
 	"github.com/ArtemVovchenko/storypet-backend/internal/app/configs"
 	"github.com/ArtemVovchenko/storypet-backend/internal/app/middleware"
+	"github.com/ArtemVovchenko/storypet-backend/internal/app/server/api"
 	"github.com/ArtemVovchenko/storypet-backend/internal/app/sessions"
 	"github.com/ArtemVovchenko/storypet-backend/internal/app/store"
 	"github.com/ArtemVovchenko/storypet-backend/internal/pkg/auth"
@@ -22,20 +23,23 @@ type Server struct {
 	databaseStore   store.DatabaseStore
 	persistentStore store.PersistentStore
 	middleware      *middleware.Middleware
+	databaseAPI     *api.DatabaseAPI
 }
 
 func New() *Server {
 	config := configs.NewServerConfig()
-	return &Server{
+	server := &Server{
 		config:    config,
 		logger:    log.New(config.LogOutStream, config.LogPrefix, config.LogFlags),
 		errLogger: log.New(config.ErrLogOutStream, configs.SrvErrLogPrefix, configs.SrvErrLogFlags),
 		router:    mux.NewRouter(),
 	}
+	server.middleware = middleware.New(server)
+	server.databaseAPI = api.NewDatabaseAPI(server)
+	return server
 }
 
 func (s *Server) Start() error {
-	s.configureMiddleware()
 	s.configureRouter()
 	if err := s.configureStore(); err != nil {
 		return err
@@ -52,6 +56,10 @@ func (s *Server) DatabaseStore() store.DatabaseStore {
 	return s.databaseStore
 }
 
+func (s *Server) DumpFilesFolder() string {
+	return s.config.DatabaseDumpsDir
+}
+
 func (s *Server) RespondError(w http.ResponseWriter, r *http.Request, statusCode int, err error) {
 	if err != nil {
 		s.Respond(w, r, statusCode, map[string]string{"error": err.Error()})
@@ -65,10 +73,6 @@ func (s *Server) Respond(w http.ResponseWriter, _ *http.Request, statusCode int,
 	if data != nil {
 		_ = json.NewEncoder(w).Encode(data)
 	}
-}
-
-func (s *Server) configureMiddleware() {
-	s.middleware = middleware.New(s)
 }
 
 func (s *Server) configureRouter() {
@@ -166,25 +170,14 @@ func (s *Server) configureRouter() {
 			),
 		)
 
-	s.router.Path("/api/database/dump/exec").
-		Name("Make Database Dump").
-		Methods(http.MethodPost).
-		HandlerFunc(
-			s.middleware.Authentication.IsAuthorised(
-				s.middleware.AccessPermission.DatabaseAccess(
-					s.handleExecutingDump(),
-				),
-			),
-		)
-
 	s.router.Path("/api/database/dump").
 		Name("Make Database Dump").
 		Methods(http.MethodGet).
-		HandlerFunc(
+		Handler(
 			s.middleware.ResponseWriting.JSONBody(
 				s.middleware.Authentication.IsAuthorised(
 					s.middleware.AccessPermission.DatabaseAccess(
-						s.handleSelectingAllDumps(),
+						s.databaseAPI.ServeEmptyRequest,
 					),
 				),
 			),
@@ -193,11 +186,11 @@ func (s *Server) configureRouter() {
 	s.router.Path("/api/database/dump/{fileName}").
 		Name("Make Database Dump").
 		Methods(http.MethodGet, http.MethodPut, http.MethodDelete).
-		HandlerFunc(
+		Handler(
 			s.middleware.ResponseWriting.JSONBody(
 				s.middleware.Authentication.IsAuthorised(
 					s.middleware.AccessPermission.DatabaseAccess(
-						s.handleRequestByDumpName(),
+						s.databaseAPI.ServeRequestByDumpName,
 					),
 				),
 			),
