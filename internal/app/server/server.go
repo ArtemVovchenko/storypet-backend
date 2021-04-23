@@ -48,6 +48,10 @@ func (s *Server) PersistentStore() store.PersistentStore {
 	return s.persistentStore
 }
 
+func (s *Server) DatabaseStore() store.DatabaseStore {
+	return s.databaseStore
+}
+
 func (s *Server) RespondError(w http.ResponseWriter, r *http.Request, statusCode int, err error) {
 	if err != nil {
 		s.Respond(w, r, statusCode, map[string]string{"error": err.Error()})
