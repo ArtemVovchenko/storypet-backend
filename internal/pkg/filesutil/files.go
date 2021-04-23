@@ -35,3 +35,7 @@ func Delete(filePath string) bool {
 func ExtractFileName(filePath string) string {
 	return filepath.Base(filePath)
 }
+
+func CreateDir(dirPath string) error {
+	return os.MkdirAll(dirPath, os.ModePerm)
+}
