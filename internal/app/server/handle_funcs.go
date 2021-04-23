@@ -5,8 +5,6 @@ import (
 	"errors"
 	"github.com/ArtemVovchenko/storypet-backend/internal/app/models"
 	"github.com/ArtemVovchenko/storypet-backend/internal/pkg/auth"
-	"github.com/ArtemVovchenko/storypet-backend/internal/pkg/filesutil"
-	"github.com/gorilla/mux"
 	"net/http"
 )
 
@@ -189,58 +187,5 @@ func (s *Server) handleMakingDump() http.HandlerFunc {
 			return
 		}
 		s.Respond(w, r, http.StatusOK, nil)
-	}
-}
-
-func (s *Server) handleSelectingAllDumps() http.HandlerFunc {
-	return func(w http.ResponseWriter, r *http.Request) {
-		dumpFiles, err := s.databaseStore.Dumps().SelectAll()
-		if err != nil {
-			s.RespondError(w, r, http.StatusInternalServerError, err)
-			return
-		}
-		s.Respond(w, r, http.StatusOK, dumpFiles)
-	}
-}
-
-func (s *Server) handleRequestByDumpName() http.HandlerFunc {
-	return func(w http.ResponseWriter, r *http.Request) {
-		dumpFileName := mux.Vars(r)["fileName"]
-		switch r.Method {
-		case http.MethodGet:
-			if !filesutil.Exist(s.config.DatabaseDumpsDir + dumpFileName) {
-				s.RespondError(w, r, http.StatusNotFound, nil)
-				return
-			}
-			dumpFile, err := s.databaseStore.Dumps().SelectByName(dumpFileName)
-			if err != nil {
-				s.RespondError(w, r, http.StatusNotFound, nil)
-				return
-			}
-			s.Respond(w, r, http.StatusOK, dumpFile)
-
-		case http.MethodPut:
-			if !filesutil.Exist(s.config.DatabaseDumpsDir + dumpFileName) {
-				s.RespondError(w, r, http.StatusNotFound, nil)
-				return
-			}
-			if err := s.databaseStore.Dumps().Execute(s.config.DatabaseDumpsDir + dumpFileName); err != nil {
-				s.RespondError(w, r, http.StatusInternalServerError, nil)
-				return
-			}
-			if err := filesutil.ClearDir(s.config.DatabaseDumpsDir); err != nil {
-				s.errLogger.Println(err)
-			}
-			s.Respond(w, r, http.StatusOK, map[string]string{"Status": "Succeed rollback"})
-
-		case http.MethodDelete:
-			dumpFile, err := s.databaseStore.Dumps().DeleteByName(dumpFileName)
-			if err != nil {
-				s.RespondError(w, r, http.StatusNotFound, nil)
-				return
-			}
-			filesutil.Delete(dumpFile.FilePath)
-			s.Respond(w, r, http.StatusNoContent, dumpFile)
-		}
 	}
 }
