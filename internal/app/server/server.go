@@ -49,7 +49,10 @@ func (s *Server) Start() error {
 		return err
 	}
 	s.logger.Println("starting server")
-	return http.ListenAndServe(s.config.BindAddr, s.router)
+	if s.config.BindAddr == "" {
+		log.Fatalln("$PORT is not specified")
+	}
+	return http.ListenAndServe(":"+s.config.BindAddr, s.router)
 }
 
 func (s *Server) PersistentStore() store.PersistentStore {
