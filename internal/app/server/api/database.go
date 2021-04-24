@@ -2,6 +2,7 @@ package api
 
 import (
 	"errors"
+	"fmt"
 	"github.com/ArtemVovchenko/storypet-backend/internal/pkg/filesutil"
 	"github.com/gorilla/mux"
 	"net/http"
@@ -53,6 +54,16 @@ func (a *DatabaseAPI) ConfigureRoutes(router *mux.Router) {
 					a.server.Middleware().AccessPermission.DatabaseAccess(
 						a.ServeRequestByDumpName,
 					),
+				),
+			),
+		)
+	router.Path("/api/database/dump/download/{fileName}").
+		Name("Download Database Dump").
+		Methods(http.MethodGet).
+		Handler(
+			a.server.Middleware().Authentication.IsAuthorised(
+				a.server.Middleware().AccessPermission.DatabaseAccess(
+					a.ServeDumpDownloadRequest,
 				),
 			),
 		)
@@ -111,6 +122,17 @@ func (a *DatabaseAPI) ServeDumpingRequest(w http.ResponseWriter, r *http.Request
 		a.server.RespondError(w, r, http.StatusServiceUnavailable, errDatabaseDumpFailed)
 		return
 	}
-
 	a.server.Respond(w, r, http.StatusOK, dumpRecord)
+}
+
+func (a *DatabaseAPI) ServeDumpDownloadRequest(w http.ResponseWriter, r *http.Request) {
+	dumpFileName := mux.Vars(r)["fileName"]
+	dumpRecord, err := a.server.DatabaseStore().Dumps().SelectByName(dumpFileName)
+	if err != nil || !filesutil.Exist(dumpRecord.FilePath) {
+		a.server.Respond(w, r, http.StatusNotFound, nil)
+		return
+	}
+	w.Header().Set("Content-Type", "application/octet-stream")
+	w.Header().Set("Content-Disposition", fmt.Sprintf("attachment; filename=%s", dumpRecord.FileName))
+	http.ServeFile(w, r, dumpRecord.FilePath)
 }
