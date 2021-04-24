@@ -1,5 +1,7 @@
 module github.com/ArtemVovchenko/storypet-backend
 
+// +heroku goVersion go1.16
+// +heroku install ./...
 go 1.16
 
 require (
