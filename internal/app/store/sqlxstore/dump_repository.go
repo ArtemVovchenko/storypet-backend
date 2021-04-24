@@ -17,12 +17,12 @@ type DumpRepository struct {
 }
 
 /*
-MakeDump creates the .sql dump file for the database
+Make creates the .sql dump file for the database
 with all public schema definitions and stored data.
 
 It accepts the folder, where created dump would be saved.
 */
-func (r *DumpRepository) Make(savePath string) error {
+func (r *DumpRepository) Make(savePath string) (*models.Dump, error) {
 	psqlConnectionAddr := r.store.config.ConnectionString
 	fileUUID := uuid.NewV4().String()
 	migrationFileName := fmt.Sprintf("%s-dump.sql", fileUUID)
@@ -30,7 +30,7 @@ func (r *DumpRepository) Make(savePath string) error {
 	if !filesutil.Exist(savePath) {
 		if err := filesutil.CreateDir(savePath); err != nil {
 			r.store.logger.Println(err)
-			return err
+			return nil, err
 		}
 	}
 
@@ -61,7 +61,7 @@ func (r *DumpRepository) Make(savePath string) error {
 	transaction, err := r.store.db.Beginx()
 	if err != nil {
 		r.store.logger.Println(err)
-		return err
+		return nil, err
 	}
 	defer func(tx *sqlx.Tx) {
 		filesutil.Delete(migrationFilePath)
@@ -73,15 +73,15 @@ func (r *DumpRepository) Make(savePath string) error {
 		dumpFile,
 	); err != nil {
 		r.store.logger.Println(err)
-		return err
+		return nil, err
 	}
 
 	if err := transaction.Commit(); err != nil {
 		r.store.logger.Println(err)
-		return err
+		return nil, err
 	}
-
-	return nil
+	dumpFile.AfterCreate()
+	return &dumpFile, nil
 }
 
 func (r *DumpRepository) Execute(dumpFilePath string) error {

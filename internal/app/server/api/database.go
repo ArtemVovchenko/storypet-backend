@@ -105,11 +105,12 @@ func (a *DatabaseAPI) ServeRequestByDumpName(w http.ResponseWriter, r *http.Requ
 	}
 }
 
-// TODO: Вернуть обьект дампа
 func (a *DatabaseAPI) ServeDumpingRequest(w http.ResponseWriter, r *http.Request) {
-	if err := a.server.DatabaseStore().Dumps().Make(a.server.DumpFilesFolder()); err != nil {
+	dumpRecord, err := a.server.DatabaseStore().Dumps().Make(a.server.DumpFilesFolder())
+	if err != nil {
 		a.server.RespondError(w, r, http.StatusServiceUnavailable, errDatabaseDumpFailed)
 		return
 	}
-	a.server.Respond(w, r, http.StatusOK, nil)
+
+	a.server.Respond(w, r, http.StatusOK, dumpRecord)
 }
