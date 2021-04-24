@@ -1,1 +1,1 @@
-web: storypet-backend
+web: go run ./main.go
