@@ -5,10 +5,16 @@ import (
 	"fmt"
 	"github.com/ArtemVovchenko/storypet-backend/internal/pkg/filesutil"
 	"github.com/gorilla/mux"
+	"io"
 	"net/http"
+	"os"
 )
 
-var errDatabaseDumpFailed = errors.New("could not create database dump")
+var (
+	errDatabaseDumpFailed        = errors.New("could not create database dump")
+	errDumpFileNotFoundInRequest = errors.New("no file field found in form/multipart section of request")
+	errDumpSaveFailed            = errors.New("can not save specified file")
+)
 
 type DatabaseAPI struct {
 	server server
@@ -34,12 +40,12 @@ func (a *DatabaseAPI) ConfigureRoutes(router *mux.Router) {
 
 	router.Path("/api/database/dump").
 		Name("Make Database Dump").
-		Methods(http.MethodGet).
+		Methods(http.MethodGet, http.MethodPost).
 		Handler(
 			a.server.Middleware().ResponseWriting.JSONBody(
 				a.server.Middleware().Authentication.IsAuthorised(
 					a.server.Middleware().AccessPermission.DatabaseAccess(
-						a.ServeEmptyRequest,
+						a.ServeRootRequest,
 					),
 				),
 			),
@@ -69,13 +75,43 @@ func (a *DatabaseAPI) ConfigureRoutes(router *mux.Router) {
 		)
 }
 
-func (a *DatabaseAPI) ServeEmptyRequest(w http.ResponseWriter, r *http.Request) {
-	dumpFiles, err := a.server.DatabaseStore().Dumps().SelectAll()
-	if err != nil {
-		a.server.RespondError(w, r, http.StatusInternalServerError, err)
-		return
+func (a *DatabaseAPI) ServeRootRequest(w http.ResponseWriter, r *http.Request) {
+	switch r.Method {
+	case http.MethodGet:
+		dumpFiles, err := a.server.DatabaseStore().Dumps().SelectAll()
+		if err != nil {
+			a.server.RespondError(w, r, http.StatusInternalServerError, err)
+			return
+		}
+		a.server.Respond(w, r, http.StatusOK, dumpFiles)
+	case http.MethodPost:
+		file, handler, err := r.FormFile("file")
+		if err != nil {
+			a.server.RespondError(w, r, http.StatusUnprocessableEntity, errDumpFileNotFoundInRequest)
+			return
+		}
+		newFileModel, err := a.server.DatabaseStore().Dumps().InsertNewDumpFile(a.server.DumpFilesFolder())
+		if err != nil {
+			a.server.RespondError(w, r, http.StatusServiceUnavailable, errDumpSaveFailed)
+			return
+		}
+		serverFile, err := os.OpenFile(newFileModel.FilePath, os.O_WRONLY|os.O_CREATE, os.ModePerm)
+		if err != nil {
+			_, _ = a.server.DatabaseStore().Dumps().DeleteByName(newFileModel.FileName)
+			a.server.RespondError(w, r, http.StatusServiceUnavailable, errDumpSaveFailed)
+			return
+		}
+		defer func() {
+			_ = serverFile.Close()
+		}()
+		written, err := io.Copy(serverFile, file)
+		if err != nil || written != handler.Size {
+			_, _ = a.server.DatabaseStore().Dumps().DeleteByName(newFileModel.FileName)
+			a.server.RespondError(w, r, http.StatusServiceUnavailable, errDumpSaveFailed)
+			return
+		}
+		a.server.Respond(w, r, http.StatusOK, newFileModel)
 	}
-	a.server.Respond(w, r, http.StatusOK, dumpFiles)
 }
 
 func (a *DatabaseAPI) ServeRequestByDumpName(w http.ResponseWriter, r *http.Request) {

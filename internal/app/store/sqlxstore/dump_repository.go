@@ -123,6 +123,55 @@ func (r *DumpRepository) Execute(dumpFilePath string) error {
 	return nil
 }
 
+func (r *DumpRepository) InsertNewDumpFile(savePath string) (*models.Dump, error) {
+	fileUUID := uuid.NewV4().String()
+	dumpFileName := fmt.Sprintf("%s-dump.sql", fileUUID)
+	if !filesutil.Exist(savePath) {
+		if err := filesutil.CreateDir(savePath); err != nil {
+			r.store.logger.Println(err)
+			return nil, err
+		}
+	}
+
+	var dumpFilePath string
+	if savePath[len(savePath)-1] != '/' {
+		dumpFilePath = savePath + "/" + dumpFileName
+	} else {
+		dumpFilePath = savePath + dumpFileName
+	}
+
+	dumpFileModel := models.Dump{
+		FilePath:  dumpFilePath,
+		CreatedAt: time.Now(),
+	}
+
+	transaction, err := r.store.db.Beginx()
+	if err != nil {
+		r.store.logger.Println(err)
+		return nil, err
+	}
+	defer func() {
+		if err := transaction.Rollback(); err != nil {
+			r.store.logger.Println(err)
+		}
+	}()
+
+	if _, err := transaction.NamedExec(
+		`INSERT INTO public.database_dumps (dump_filepath, created_at) VALUES (:dump_filepath, :created_at)`,
+		dumpFileModel,
+	); err != nil {
+		r.store.logger.Println(err)
+		return nil, err
+	}
+	if err := transaction.Commit(); err != nil {
+		r.store.logger.Println(err)
+		return nil, err
+	}
+
+	dumpFileModel.AfterCreate()
+	return &dumpFileModel, nil
+}
+
 func (r *DumpRepository) SelectAll() ([]models.Dump, error) {
 	var dumps []models.Dump
 	if err := r.store.db.Select(
