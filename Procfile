@@ -1,1 +1,1 @@
-web: .
+web: storypet-backend
