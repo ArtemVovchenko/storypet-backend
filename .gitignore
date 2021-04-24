@@ -2,6 +2,7 @@
 
 dumps
 tmp/
+go/
 
 # Default ignored files
 /shelf/
