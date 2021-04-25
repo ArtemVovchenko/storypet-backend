@@ -4,6 +4,7 @@ import (
 	"database/sql"
 	"github.com/ArtemVovchenko/storypet-backend/internal/app/models"
 	"github.com/jmoiron/sqlx"
+	"log"
 )
 
 type UserRepository struct {
@@ -129,4 +130,91 @@ func (r *UserRepository) SelectAll() ([]models.User, error) {
 		userModels[idx].AfterCreate()
 	}
 	return userModels, nil
+}
+
+func (r *UserRepository) Update(other *models.User) (*models.User, error) {
+	current, err := r.store.Users().FindByID(other.UserID)
+	if err != nil {
+		r.store.logger.Println(err)
+		return nil, err
+	}
+	current.Update(other)
+	if err := current.BeforeCreate(); err != nil {
+		return nil, err
+	}
+	if err := current.Validate(); err != nil {
+		return nil, err
+	}
+
+	transaction, err := r.store.db.Beginx()
+	if err != nil {
+		r.store.logger.Println(err)
+		return nil, err
+	}
+	defer func() {
+		_ = transaction.Rollback()
+	}()
+
+	if _, err := transaction.NamedExec(
+		`UPDATE public.users 
+								  SET 
+									  account_email = :account_email,
+									  username = :username,
+									  full_name = :full_name, 
+									  backup_email = :backup_email, 
+									  location = :location
+								  WHERE user_id = :user_id`,
+		current,
+	); err != nil {
+		r.store.logger.Println(err)
+		return nil, err
+	}
+	if err := transaction.Commit(); err != nil {
+		r.store.logger.Println(err)
+		return nil, err
+	}
+
+	current.AfterCreate()
+	return current, nil
+}
+
+func (r *UserRepository) ChangePassword(userID int, newPassword string) error {
+	userModel, err := r.FindByID(userID)
+	if err != nil {
+		return err
+	}
+	userModel.AfterCreate()
+	userModel.Password = newPassword
+	if err := userModel.BeforeCreate(); err != nil {
+		log.Println(err)
+		return err
+	}
+	if err := userModel.Validate(); err != nil {
+		return err
+	}
+
+	transaction, err := r.store.db.Beginx()
+	if err != nil {
+		r.store.logger.Println(err)
+		return err
+	}
+	defer func() {
+		_ = transaction.Rollback()
+	}()
+
+	if _, err := transaction.NamedExec(
+		`UPDATE public.users 
+				SET  
+					password_sha256 = :password_sha256
+				WHERE user_id = :user_id`,
+		userModel,
+	); err != nil {
+		r.store.logger.Println(err)
+		return err
+	}
+	if err := transaction.Commit(); err != nil {
+		r.store.logger.Println(err)
+		return err
+	}
+	return nil
 }

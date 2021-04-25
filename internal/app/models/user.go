@@ -57,10 +57,10 @@ func (u *User) BeforeCreate() error {
 }
 
 func (u *User) AfterCreate() {
-	if u.BackupEmail.Valid {
+	if u.BackupEmail != nil && u.BackupEmail.Valid {
 		u.SpecifiedBackupEmail = u.BackupEmail.String
 	}
-	if u.Location.Valid {
+	if u.Location != nil && u.Location.Valid {
 		u.SpecifiedLocation = u.Location.String
 	}
 }
@@ -108,6 +108,24 @@ func (u *User) Validate() error {
 		validation.Field(&u.FullName, validation.Required, validation.Length(5, 30)),
 		validation.Field(&u.SpecifiedBackupEmail, is.Email),
 	)
+}
+
+func (u *User) Update(other *User) {
+	if u.AccountEmail != other.AccountEmail && len(other.AccountEmail) > 0 {
+		u.AccountEmail = other.AccountEmail
+	}
+	if u.FullName != other.FullName && len(other.FullName) > 0 {
+		u.FullName = other.FullName
+	}
+	if u.Username != other.Username && len(other.Username) > 0 {
+		u.Username = other.Username
+	}
+	if u.SpecifiedLocation != other.SpecifiedLocation && len(other.SpecifiedLocation) > 0 {
+		u.SpecifiedLocation = other.SpecifiedLocation
+	}
+	if u.SpecifiedBackupEmail != other.SpecifiedBackupEmail && len(other.SpecifiedBackupEmail) > 0 {
+		u.SpecifiedLocation = other.SpecifiedLocation
+	}
 }
 
 func encryptString(s string) (string, error) {

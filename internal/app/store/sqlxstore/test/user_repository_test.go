@@ -138,9 +138,118 @@ func TestFindByID(t *testing.T) {
 	}
 }
 
-func TestDeleteByID(t *testing.T) {
+func TestChangePassword(t *testing.T) {
+	userModel, _ := store.Users().FindByAccountEmail("sebre.ds@gmail.com")
+	testCases := []struct {
+		name     string
+		id       int
+		password string
+		isError  bool
+	}{
+		{
+			name:     "Not Valid Password (Empty)",
+			id:       userModel.UserID,
+			password: "",
+			isError:  false,
+		},
+		{
+			name:     "valid",
+			id:       userModel.UserID,
+			password: "qwertyqwertyqwerty",
+			isError:  false,
+		},
+		{
+			name:     "Not Valid Password (Short)",
+			id:       userModel.UserID,
+			password: "1",
+			isError:  true,
+		},
+	}
+	for _, tc := range testCases {
+		err := store.Users().ChangePassword(tc.id, tc.password)
+		if tc.isError {
+			assert.Error(t, err)
+		} else {
+			assert.NoError(t, err)
+		}
+	}
+	newModel, _ := store.Users().FindByID(userModel.UserID)
+	assert.NotEqualf(t, userModel.PasswordSHA256, newModel.PasswordSHA256, "Password still equals")
+}
+
+func TestUpdate(t *testing.T) {
 	validUser, err := store.Users().FindByAccountEmail("sebre.ds@gmail.com")
 	assert.NoError(t, err)
+	testCases := []struct {
+		name    string
+		entity  models.User
+		isError bool
+	}{
+		{
+			name: "No account email",
+			entity: models.User{
+				UserID:            validUser.UserID,
+				AccountEmail:      "",
+				Password:          "qwerty123",
+				Username:          "sebreID",
+				FullName:          "Sebre Adjando",
+				SpecifiedLocation: "Colorado, USA",
+			},
+			isError: false,
+		},
+		{
+			name: "Valid",
+			entity: models.User{
+				UserID:            validUser.UserID,
+				AccountEmail:      "sebre.ds@gmail.us",
+				Password:          "qwerty",
+				Username:          "sebreID33",
+				FullName:          "Sebre Adjando",
+				SpecifiedLocation: "New York, USA",
+			},
+			isError: false,
+		},
+		{
+			name: "Duplicated email",
+			entity: models.User{
+				UserID:            validUser.UserID,
+				AccountEmail:      "vovchenko.artem@icloud.com",
+				Password:          "qwerty123",
+				Username:          "sebreID",
+				FullName:          "Sebre Adjando",
+				SpecifiedLocation: "Colorado, USA",
+			},
+			isError: true,
+		},
+		{
+			name: "Duplicated username",
+			entity: models.User{
+				UserID:            validUser.UserID,
+				AccountEmail:      "sebre.ds@gmail.us",
+				Password:          "qwerty123",
+				Username:          "an_unseen_future",
+				FullName:          "Sebre Adjando",
+				SpecifiedLocation: "Colorado, USA",
+			},
+			isError: true,
+		},
+	}
+	for _, tc := range testCases {
+		_, err := store.Users().Update(&tc.entity)
+		if tc.isError {
+			assert.Error(t, err)
+		} else {
+			assert.NoError(t, err)
+		}
+	}
+}
+
+func TestDeleteByID(t *testing.T) {
+	validUser, err := store.Users().FindByAccountEmail("sebre.ds@gmail.us")
+	assert.NoError(t, err)
+	if err != nil {
+		t.FailNow()
+	}
 	testCases := []struct {
 		name    string
 		id      int

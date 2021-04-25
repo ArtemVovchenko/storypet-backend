@@ -8,6 +8,8 @@ type UserRepository interface {
 	FindByAccountEmail(email string) (*models.User, error)
 	FindByID(id int) (*models.User, error)
 	SelectAll() ([]models.User, error)
+	Update(other *models.User) (*models.User, error)
+	ChangePassword(userID int, newPassword string) error
 }
 
 type RoleRepository interface {
