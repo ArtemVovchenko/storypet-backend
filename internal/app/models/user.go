@@ -56,7 +56,7 @@ func (u *User) BeforeCreate() error {
 	return nil
 }
 
-func (u *User) CheckNullableData() {
+func (u *User) AfterCreate() {
 	if u.BackupEmail.Valid {
 		u.SpecifiedBackupEmail = u.BackupEmail.String
 	}
