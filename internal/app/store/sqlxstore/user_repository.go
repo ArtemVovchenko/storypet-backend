@@ -27,9 +27,7 @@ func (r *UserRepository) Create(u *models.User) (*models.User, error) {
 		return nil, err
 	}
 	defer func(transaction *sqlx.Tx) {
-		if err := transaction.Rollback(); err != nil {
-			r.store.logger.Println(err)
-		}
+		_ = transaction.Rollback()
 	}(transaction)
 
 	_, err = transaction.NamedExec(`INSERT INTO public.users (account_email, password_sha256, username, full_name, backup_email, location)
@@ -119,4 +117,16 @@ func (r *UserRepository) FindByID(id int) (*models.User, error) {
 		return nil, err
 	}
 	return userEntity, nil
+}
+
+func (r *UserRepository) SelectAll() ([]models.User, error) {
+	var userModels []models.User
+	if err := r.store.db.Select(&userModels, `SELECT * FROM public.users;`); err != nil {
+		r.store.logger.Println(err)
+		return nil, err
+	}
+	for idx := range userModels {
+		userModels[idx].AfterCreate()
+	}
+	return userModels, nil
 }
