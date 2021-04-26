@@ -53,116 +53,129 @@ func (a SessionAPI) ConfigureRoutes(router *mux.Router) {
 }
 
 func (a *SessionAPI) ServeLoginRequest(w http.ResponseWriter, r *http.Request) {
-	type requestBody struct {
-		Email    string `json:"email"`
-		Password string `json:"password"`
-	}
+	switch r.Method {
+	case http.MethodPost:
+		type requestBody struct {
+			Email    string `json:"email"`
+			Password string `json:"password"`
+		}
 
-	rb := &requestBody{}
-	if err := json.NewDecoder(r.Body).Decode(rb); err != nil {
-		a.server.RespondError(w, r, http.StatusBadRequest, err)
-		return
-	}
+		rb := &requestBody{}
+		if err := json.NewDecoder(r.Body).Decode(rb); err != nil {
+			a.server.RespondError(w, r, http.StatusBadRequest, err)
+			return
+		}
 
-	u, err := a.server.DatabaseStore().Users().FindByAccountEmail(rb.Email)
-	if err != nil {
-		a.server.Respond(w, r, http.StatusUnauthorized, exceptions.IncorrectAuthData)
-		return
-	}
+		u, err := a.server.DatabaseStore().Users().FindByAccountEmail(rb.Email)
+		if err != nil {
+			a.server.Respond(w, r, http.StatusUnauthorized, exceptions.IncorrectAuthData)
+			return
+		}
 
-	if !u.ComparePasswords(rb.Password) {
-		a.server.Respond(w, r, http.StatusUnauthorized, exceptions.IncorrectAuthData)
-		return
-	}
+		if !u.ComparePasswords(rb.Password) {
+			a.server.Respond(w, r, http.StatusUnauthorized, exceptions.IncorrectAuthData)
+			return
+		}
 
-	token, err := auth.CreateToken(u.UserID)
-	if err != nil {
-		a.server.RespondError(w, r, http.StatusUnprocessableEntity, err)
-		return
-	}
+		token, err := auth.CreateToken(u.UserID)
+		if err != nil {
+			a.server.RespondError(w, r, http.StatusUnprocessableEntity, err)
+			return
+		}
 
-	if err := a.createAndSaveSession(token, u.UserID); err != nil {
-		a.server.RespondError(w, r, http.StatusInternalServerError, nil)
-		return
-	}
+		if err := a.createAndSaveSession(token, u.UserID); err != nil {
+			a.server.RespondError(w, r, http.StatusInternalServerError, nil)
+			return
+		}
 
-	a.server.Respond(w, r, http.StatusOK, map[string]string{
-		"access":  token.AccessToken,
-		"refresh": token.RefreshToken,
-	})
+		a.server.Respond(w, r, http.StatusOK, map[string]string{
+			"access":  token.AccessToken,
+			"refresh": token.RefreshToken,
+		})
+	}
 }
 
 func (a *SessionAPI) ServeLogoutRequest(w http.ResponseWriter, r *http.Request) {
-	accessInfo, err := auth.ExtractAccessMeta(r)
-	if err != nil {
-		a.server.Respond(w, r, http.StatusUnauthorized, "Unauthorized")
-		return
+	switch r.Method {
+	case http.MethodPost:
+		accessInfo, err := auth.ExtractAccessMeta(r)
+		if err != nil {
+			a.server.Respond(w, r, http.StatusUnauthorized, "Unauthorized")
+			return
+		}
+		if err := a.deleteSession(accessInfo.AccessUUID); err != nil {
+			a.server.Respond(w, r, http.StatusUnauthorized, "Unauthorized")
+			return
+		}
+		a.server.Respond(w, r, http.StatusOK, "Logged Out")
 	}
-	if err := a.deleteSession(accessInfo.AccessUUID); err != nil {
-		a.server.Respond(w, r, http.StatusUnauthorized, "Unauthorized")
-		return
-	}
-	a.server.Respond(w, r, http.StatusOK, "Logged Out")
 }
 
 func (a *SessionAPI) ServeRefreshRequest(w http.ResponseWriter, r *http.Request) {
-	type requestBody struct {
-		Refresh string `json:"refresh"`
-	}
+	switch r.Method {
+	case http.MethodPost:
+		type requestBody struct {
+			Refresh string `json:"refresh"`
+		}
 
-	rb := &requestBody{}
-	if err := json.NewDecoder(r.Body).Decode(rb); err != nil {
-		a.server.RespondError(w, r, http.StatusBadRequest, err)
-		return
-	}
+		rb := &requestBody{}
+		if err := json.NewDecoder(r.Body).Decode(rb); err != nil {
+			a.server.RespondError(w, r, http.StatusBadRequest, err)
+			return
+		}
 
-	refreshMeta, err := auth.ExtractRefreshMeta(rb.Refresh)
-	if err != nil {
-		a.server.RespondError(w, r, http.StatusUnprocessableEntity, exceptions.IncorrectRefreshToken)
-		return
-	}
+		refreshMeta, err := auth.ExtractRefreshMeta(rb.Refresh)
+		if err != nil {
+			a.server.RespondError(w, r, http.StatusUnprocessableEntity, exceptions.IncorrectRefreshToken)
+			return
+		}
 
-	userID, err := a.server.PersistentStore().GetUserIDByRefreshUUID(refreshMeta.RefreshUUID)
-	if err != nil {
-		a.server.Respond(w, r, http.StatusUnprocessableEntity, exceptions.IncorrectRefreshToken)
-		return
-	}
+		userID, err := a.server.PersistentStore().GetUserIDByRefreshUUID(refreshMeta.RefreshUUID)
+		if err != nil {
+			a.server.Respond(w, r, http.StatusUnprocessableEntity, exceptions.IncorrectRefreshToken)
+			return
+		}
 
-	err = a.server.PersistentStore().DeleteRefreshByUUID(refreshMeta.RefreshUUID)
-	if err != nil {
-		a.server.RespondError(w, r, http.StatusInternalServerError, nil)
-		return
-	}
+		err = a.server.PersistentStore().DeleteRefreshByUUID(refreshMeta.RefreshUUID)
+		if err != nil {
+			a.server.RespondError(w, r, http.StatusInternalServerError, nil)
+			return
+		}
 
-	token, err := auth.CreateToken(userID)
-	if err != nil {
-		a.server.RespondError(w, r, http.StatusInternalServerError, nil)
-		return
-	}
+		token, err := auth.CreateToken(userID)
+		if err != nil {
+			a.server.RespondError(w, r, http.StatusInternalServerError, nil)
+			return
+		}
 
-	if err := a.createAndSaveSession(token, userID); err != nil {
-		a.server.RespondError(w, r, http.StatusInternalServerError, nil)
-		return
-	}
+		if err := a.createAndSaveSession(token, userID); err != nil {
+			a.server.RespondError(w, r, http.StatusInternalServerError, nil)
+			return
+		}
 
-	a.server.Respond(w, r, http.StatusOK, map[string]string{
-		"access":  token.AccessToken,
-		"refresh": token.RefreshToken,
-	})
+		a.server.Respond(w, r, http.StatusOK, map[string]string{
+			"access":  token.AccessToken,
+			"refresh": token.RefreshToken,
+		})
+	}
 }
 
 func (a *SessionAPI) ServeSessionInfoRequest(w http.ResponseWriter, r *http.Request) {
-	accessInfo, err := auth.ExtractAccessMeta(r)
-	if err != nil {
-		a.server.Respond(w, r, http.StatusUnauthorized, "Unauthorized")
-		return
+	switch r.Method {
+	case http.MethodGet:
+		accessInfo, err := auth.ExtractAccessMeta(r)
+		if err != nil {
+			a.server.Respond(w, r, http.StatusUnauthorized, "Unauthorized")
+			return
+		}
+		session, err := a.server.PersistentStore().GetSessionInfo(accessInfo.AccessUUID)
+		if err != nil {
+			a.server.Respond(w, r, http.StatusUnauthorized, "Unauthorized")
+			return
+		}
+		a.server.Respond(w, r, http.StatusOK, session)
 	}
-	session, err := a.server.PersistentStore().GetSessionInfo(accessInfo.AccessUUID)
-	if err != nil {
-		a.server.Respond(w, r, http.StatusUnauthorized, "Unauthorized")
-		return
-	}
-	a.server.Respond(w, r, http.StatusOK, session)
+
 }
 
 func (a *SessionAPI) createAndSaveSession(tokenPairMeta *auth.TokenPairInfo, userID int) error {
