@@ -6,6 +6,7 @@ import (
 	"github.com/ArtemVovchenko/storypet-backend/internal/app/middleware"
 	"github.com/ArtemVovchenko/storypet-backend/internal/app/server/api"
 	"github.com/ArtemVovchenko/storypet-backend/internal/app/store"
+	"github.com/gorilla/handlers"
 	"github.com/gorilla/mux"
 	"log"
 	"net/http"
@@ -71,6 +72,10 @@ func (s *Server) DumpFilesFolder() string {
 	return s.config.DatabaseDumpsDir
 }
 
+func (s *Server) Logger() *log.Logger {
+	return s.logger
+}
+
 func (s *Server) RespondError(w http.ResponseWriter, r *http.Request, statusCode int, err error) {
 	if err != nil {
 		s.Respond(w, r, statusCode, map[string]string{"error": err.Error()})
@@ -87,6 +92,11 @@ func (s *Server) Respond(w http.ResponseWriter, _ *http.Request, statusCode int,
 }
 
 func (s *Server) configureRouter() {
+	s.router.Use(handlers.CORS(handlers.AllowedOrigins([]string{"*"})))
+	s.router.Use(s.middleware.InfoMiddleware.MarkRequest)
+	s.router.Use(s.middleware.InfoMiddleware.LogRequest)
+	s.router.Use(s.middleware.ResponseWriting.JSONBody)
+
 	s.databaseAPI.ConfigureRoutes(s.router)
 	s.sessionAPI.ConfigureRoutes(s.router)
 	s.userAPI.ConfigureRoutes(s.router)

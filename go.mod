@@ -9,6 +9,7 @@ require (
 	github.com/dgrijalva/jwt-go v3.2.0+incompatible
 	github.com/go-ozzo/ozzo-validation v3.6.0+incompatible
 	github.com/go-redis/redis/v7 v7.4.0
+	github.com/gorilla/handlers v1.5.1
 	github.com/gorilla/mux v1.8.0
 	github.com/jmoiron/sqlx v1.3.3
 	github.com/lib/pq v1.2.0
@@ -16,5 +17,6 @@ require (
 	github.com/stretchr/testify v1.7.0
 	github.com/twinj/uuid v1.0.0
 	golang.org/x/crypto v0.0.0-20210415154028-4f45737414dc
+	golang.org/x/net v0.0.0-20210423184538-5f58ad60dda6
 	gopkg.in/stretchr/testify.v1 v1.2.2 // indirect
 )

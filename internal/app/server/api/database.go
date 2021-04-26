@@ -1,19 +1,13 @@
 package api
 
 import (
-	"errors"
 	"fmt"
+	"github.com/ArtemVovchenko/storypet-backend/internal/app/server/api/exceptions"
 	"github.com/ArtemVovchenko/storypet-backend/internal/pkg/filesutil"
 	"github.com/gorilla/mux"
 	"io"
 	"net/http"
 	"os"
-)
-
-var (
-	errDatabaseDumpFailed        = errors.New("could not create database dump")
-	errDumpFileNotFoundInRequest = errors.New("no file field found in form/multipart section of request")
-	errDumpSaveFailed            = errors.New("can not save specified file")
 )
 
 type DatabaseAPI struct {
@@ -25,52 +19,40 @@ func NewDatabaseAPI(server server) *DatabaseAPI {
 }
 
 func (a *DatabaseAPI) ConfigureRoutes(router *mux.Router) {
-	router.Path("/api/database/dump/make").
+	sb := router.PathPrefix("/api/database").Subrouter()
+	sb.Use(a.server.Middleware().Authentication.IsAuthorised)
+	sb.Path("/dump/make").
 		Name("Make Database Dump").
 		Methods(http.MethodGet).
 		HandlerFunc(
-			a.server.Middleware().ResponseWriting.JSONBody(
-				a.server.Middleware().Authentication.IsAuthorised(
-					a.server.Middleware().AccessPermission.DatabaseAccess(
-						a.ServeDumpingRequest,
-					),
-				),
+			a.server.Middleware().AccessPermission.DatabaseAccess(
+				a.ServeDumpingRequest,
 			),
 		)
 
-	router.Path("/api/database/dump").
+	sb.Path("/dump").
 		Name("Make Database Dump").
 		Methods(http.MethodGet, http.MethodPost).
 		Handler(
-			a.server.Middleware().ResponseWriting.JSONBody(
-				a.server.Middleware().Authentication.IsAuthorised(
-					a.server.Middleware().AccessPermission.DatabaseAccess(
-						a.ServeRootRequest,
-					),
-				),
+			a.server.Middleware().AccessPermission.DatabaseAccess(
+				a.ServeRootRequest,
 			),
 		)
 
-	router.Path("/api/database/dump/{fileName}").
+	sb.Path("/dump/{fileName}").
 		Name("Make Database Dump").
 		Methods(http.MethodGet, http.MethodPut, http.MethodDelete).
 		Handler(
-			a.server.Middleware().ResponseWriting.JSONBody(
-				a.server.Middleware().Authentication.IsAuthorised(
-					a.server.Middleware().AccessPermission.DatabaseAccess(
-						a.ServeRequestByDumpName,
-					),
-				),
+			a.server.Middleware().AccessPermission.DatabaseAccess(
+				a.ServeRequestByDumpName,
 			),
 		)
-	router.Path("/api/database/dump/download/{fileName}").
+	sb.Path("/dump/download/{fileName}").
 		Name("Download Database Dump").
 		Methods(http.MethodGet).
 		Handler(
-			a.server.Middleware().Authentication.IsAuthorised(
-				a.server.Middleware().AccessPermission.DatabaseAccess(
-					a.ServeDumpDownloadRequest,
-				),
+			a.server.Middleware().AccessPermission.DatabaseAccess(
+				a.ServeDumpDownloadRequest,
 			),
 		)
 }
@@ -87,18 +69,18 @@ func (a *DatabaseAPI) ServeRootRequest(w http.ResponseWriter, r *http.Request) {
 	case http.MethodPost:
 		file, handler, err := r.FormFile("file")
 		if err != nil {
-			a.server.RespondError(w, r, http.StatusUnprocessableEntity, errDumpFileNotFoundInRequest)
+			a.server.RespondError(w, r, http.StatusUnprocessableEntity, exceptions.DumpFileNotFoundInRequest)
 			return
 		}
 		newFileModel, err := a.server.DatabaseStore().Dumps().InsertNewDumpFile(a.server.DumpFilesFolder())
 		if err != nil {
-			a.server.RespondError(w, r, http.StatusServiceUnavailable, errDumpSaveFailed)
+			a.server.RespondError(w, r, http.StatusServiceUnavailable, exceptions.DumpSaveFailed)
 			return
 		}
 		serverFile, err := os.OpenFile(newFileModel.FilePath, os.O_WRONLY|os.O_CREATE, os.ModePerm)
 		if err != nil {
 			_, _ = a.server.DatabaseStore().Dumps().DeleteByName(newFileModel.FileName)
-			a.server.RespondError(w, r, http.StatusServiceUnavailable, errDumpSaveFailed)
+			a.server.RespondError(w, r, http.StatusServiceUnavailable, exceptions.DumpSaveFailed)
 			return
 		}
 		defer func() {
@@ -107,7 +89,7 @@ func (a *DatabaseAPI) ServeRootRequest(w http.ResponseWriter, r *http.Request) {
 		written, err := io.Copy(serverFile, file)
 		if err != nil || written != handler.Size {
 			_, _ = a.server.DatabaseStore().Dumps().DeleteByName(newFileModel.FileName)
-			a.server.RespondError(w, r, http.StatusServiceUnavailable, errDumpSaveFailed)
+			a.server.RespondError(w, r, http.StatusServiceUnavailable, exceptions.DumpSaveFailed)
 			return
 		}
 		a.server.Respond(w, r, http.StatusOK, newFileModel)
@@ -155,7 +137,7 @@ func (a *DatabaseAPI) ServeRequestByDumpName(w http.ResponseWriter, r *http.Requ
 func (a *DatabaseAPI) ServeDumpingRequest(w http.ResponseWriter, r *http.Request) {
 	dumpRecord, err := a.server.DatabaseStore().Dumps().Make(a.server.DumpFilesFolder())
 	if err != nil {
-		a.server.RespondError(w, r, http.StatusServiceUnavailable, errDatabaseDumpFailed)
+		a.server.RespondError(w, r, http.StatusServiceUnavailable, exceptions.DatabaseDumpFailed)
 		return
 	}
 	a.server.Respond(w, r, http.StatusOK, dumpRecord)
