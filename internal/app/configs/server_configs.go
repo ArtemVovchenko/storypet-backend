@@ -11,9 +11,9 @@ var (
 	SrvLogFlags  = log.LstdFlags
 	SrvLogPrefix = "SRV:"
 
-	SrvErrLogStream = os.Stderr
-	SrvErrLogFlags  = log.Llongfile | log.LstdFlags
-	SrvErrLogPrefix = "ERR:"
+	DatabaseLogStream = os.Stderr
+	DatabaseLogFlags  = log.Llongfile | log.LstdFlags
+	DatabaseLogPrefix = "DATABASE: "
 
 	DatabaseDumpsDir = getCWD() + os.Getenv("DATABASE_DUMP_DIR")
 )

@@ -11,4 +11,6 @@ var (
 
 	IncorrectAuthData     = errors.New("incorrect email or password")
 	IncorrectRefreshToken = errors.New("incorrect refresh token")
+
+	RequestedUserNotFound = errors.New("no user with requested id")
 )

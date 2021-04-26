@@ -4,7 +4,6 @@ import (
 	"database/sql"
 	"github.com/ArtemVovchenko/storypet-backend/internal/app/models"
 	"github.com/jmoiron/sqlx"
-	"log"
 )
 
 type UserRepository struct {
@@ -74,10 +73,7 @@ func (r *UserRepository) DeleteByID(id int) (*models.User, error) {
 		return nil, err
 	}
 	defer func(transaction *sql.Tx) {
-		if err := transaction.Rollback(); err != nil {
-			r.store.logger.Println(err)
-		}
-
+		_ = transaction.Rollback()
 	}(transaction)
 
 	_, err = transaction.Exec(`DELETE FROM public.users WHERE user_id = $1`, userModel.UserID)
@@ -187,7 +183,7 @@ func (r *UserRepository) ChangePassword(userID int, newPassword string) error {
 	userModel.AfterCreate()
 	userModel.Password = newPassword
 	if err := userModel.BeforeCreate(); err != nil {
-		log.Println(err)
+		r.store.logger.Println()
 		return err
 	}
 	if err := userModel.Validate(); err != nil {
@@ -209,6 +205,54 @@ func (r *UserRepository) ChangePassword(userID int, newPassword string) error {
 					password_sha256 = :password_sha256
 				WHERE user_id = :user_id`,
 		userModel,
+	); err != nil {
+		r.store.logger.Println(err)
+		return err
+	}
+	if err := transaction.Commit(); err != nil {
+		r.store.logger.Println(err)
+		return err
+	}
+	return nil
+}
+
+func (r *UserRepository) AssignRole(userID int, roleID int) error {
+	transaction, err := r.store.db.Beginx()
+	if err != nil {
+		r.store.logger.Println(err)
+		return err
+	}
+	defer func() {
+		_ = transaction.Rollback()
+	}()
+	if _, err := r.store.db.Exec(
+		`INSERT INTO public.user_roles (user_id, role_id) VALUES ($1, $2);`,
+		userID,
+		roleID,
+	); err != nil {
+		r.store.logger.Println(err)
+		return err
+	}
+	if err := transaction.Commit(); err != nil {
+		r.store.logger.Println(err)
+		return err
+	}
+	return nil
+}
+
+func (r *UserRepository) DeleteRole(userID int, roleID int) error {
+	transaction, err := r.store.db.Beginx()
+	if err != nil {
+		r.store.logger.Println(err)
+		return err
+	}
+	defer func() {
+		_ = transaction.Rollback()
+	}()
+	if _, err := r.store.db.Exec(
+		`DELETE FROM public.user_roles WHERE user_id = $1 AND role_id = $2 ;`,
+		userID,
+		roleID,
 	); err != nil {
 		r.store.logger.Println(err)
 		return err

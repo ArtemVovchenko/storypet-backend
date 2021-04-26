@@ -39,6 +39,11 @@ func (a *UserAPI) ConfigureRoutes(router *mux.Router) {
 		Name("User By ID").
 		Methods(http.MethodGet, http.MethodPut, http.MethodDelete).
 		HandlerFunc(a.ServeRequestByID)
+
+	sb.Path("/{id:[0-9]+}/role").
+		Name("User By ID").
+		Methods(http.MethodGet, http.MethodPost, http.MethodDelete).
+		HandlerFunc(a.ServeRoleRequest)
 }
 
 func (a *UserAPI) ServeRegistrationRequest(w http.ResponseWriter, r *http.Request) {
@@ -105,20 +110,18 @@ func (a *UserAPI) ServeRootRequest(w http.ResponseWriter, r *http.Request) {
 }
 
 func (a *UserAPI) ServeRequestByID(w http.ResponseWriter, r *http.Request) {
-	requestID := r.Context().Value(middleware.CtxReqestUUID).(string)
-	accessID := r.Context().Value(middleware.CtxAccessUUID).(string)
-	rawUserID, err := strconv.ParseInt(mux.Vars(r)["id"], 10, 64)
+	requestID, session, err := a.server.GetAuthorizedRequestInfo(r)
 	if err != nil {
-		a.server.RespondError(w, r, http.StatusInternalServerError, exceptions.UnprocessableURIParam)
-	}
-	requestedUserID := int(rawUserID)
-
-	session, err := a.server.PersistentStore().GetSessionInfo(accessID)
-	if err != nil {
-		a.server.Logger().Printf("Persistent database err: %v, Request ID: %s", requestID)
 		a.server.RespondError(w, r, http.StatusInternalServerError, nil)
 		return
 	}
+
+	rawUserID, err := strconv.ParseInt(mux.Vars(r)["id"], 10, 64)
+	if err != nil {
+		a.server.RespondError(w, r, http.StatusInternalServerError, exceptions.UnprocessableURIParam)
+		return
+	}
+	requestedUserID := int(rawUserID)
 
 	switch r.Method {
 	case http.MethodGet:
@@ -191,5 +194,116 @@ func (a *UserAPI) ServeRequestByID(w http.ResponseWriter, r *http.Request) {
 		}
 
 		a.server.Respond(w, r, http.StatusNoContent, nil)
+	}
+}
+
+func (a *UserAPI) ServeRoleRequest(w http.ResponseWriter, r *http.Request) {
+	requestID, session, err := a.server.GetAuthorizedRequestInfo(r)
+	if err != nil {
+		a.server.RespondError(w, r, http.StatusInternalServerError, nil)
+	}
+	rawUserID, err := strconv.ParseInt(mux.Vars(r)["id"], 10, 64)
+	if err != nil {
+		a.server.RespondError(w, r, http.StatusInternalServerError, exceptions.UnprocessableURIParam)
+		return
+	}
+	requestedUserID := int(rawUserID)
+
+	switch r.Method {
+	case http.MethodGet:
+		userRoles, err := a.server.DatabaseStore().Roles().SelectUserRoles(requestedUserID)
+		if err != nil {
+			if errors.Is(err, sql.ErrNoRows) {
+				a.server.RespondError(w, r, http.StatusNotFound, exceptions.RequestedUserNotFound)
+				return
+			}
+			a.server.Logger().Println(err)
+			a.server.RespondError(w, r, http.StatusInternalServerError, nil)
+			return
+		}
+		a.server.Respond(w, r, http.StatusOK, userRoles)
+
+	case http.MethodPost:
+		type requestBody struct {
+			RoleID int `json:"role_id"`
+		}
+		type responseBody struct {
+			User  *models.User  `json:"user"`
+			Roles []models.Role `json:"roles"`
+		}
+
+		if !permissions.AnyRoleHavePermissions(
+			session.Roles, permissions.Permissions().RolesPermission,
+			permissions.Permissions().UsersPermission,
+		) {
+			a.server.RespondError(w, r, http.StatusForbidden, nil)
+			return
+		}
+
+		rb := &requestBody{}
+		if err := json.NewDecoder(r.Body).Decode(rb); err != nil {
+			a.server.RespondError(w, r, http.StatusUnprocessableEntity, err)
+			return
+		}
+		if err := a.server.DatabaseStore().Users().AssignRole(requestedUserID, rb.RoleID); err != nil {
+			a.server.Logger().Printf("Database err: %v, Request ID: %s", requestID)
+			a.server.RespondError(w, r, http.StatusUnprocessableEntity, nil)
+			return
+		}
+		userModel, err := a.server.DatabaseStore().Users().FindByID(requestedUserID)
+		if err != nil {
+			a.server.Logger().Printf("Database err: %v, Request ID: %s", requestID)
+			a.server.RespondError(w, r, http.StatusInternalServerError, nil)
+			return
+		}
+		userRoles, err := a.server.DatabaseStore().Roles().SelectUserRoles(requestedUserID)
+		if err != nil {
+			a.server.Logger().Printf("Database err: %v, Request ID: %s", requestID)
+			a.server.RespondError(w, r, http.StatusInternalServerError, nil)
+			return
+		}
+		a.server.Respond(w, r, http.StatusOK, &responseBody{User: userModel, Roles: userRoles})
+
+	case http.MethodDelete:
+		type requestBody struct {
+			RoleID int `json:"role_id"`
+		}
+		type responseBody struct {
+			User  *models.User  `json:"user"`
+			Roles []models.Role `json:"roles"`
+		}
+
+		if !permissions.AnyRoleHavePermissions(
+			session.Roles, permissions.Permissions().RolesPermission,
+			permissions.Permissions().UsersPermission,
+		) {
+			a.server.RespondError(w, r, http.StatusForbidden, nil)
+			return
+		}
+
+		rb := &requestBody{}
+		if err := json.NewDecoder(r.Body).Decode(rb); err != nil {
+			a.server.RespondError(w, r, http.StatusUnprocessableEntity, err)
+			return
+		}
+		if err := a.server.DatabaseStore().Users().DeleteRole(requestedUserID, rb.RoleID); err != nil {
+			a.server.Logger().Printf("Database err: %v, Request ID: %s", requestID)
+			a.server.RespondError(w, r, http.StatusUnprocessableEntity, nil)
+			return
+		}
+		userModel, err := a.server.DatabaseStore().Users().FindByID(requestedUserID)
+		if err != nil {
+			a.server.Logger().Printf("Database err: %v, Request ID: %s", requestID)
+			a.server.RespondError(w, r, http.StatusInternalServerError, nil)
+			return
+		}
+		userRoles, err := a.server.DatabaseStore().Roles().SelectUserRoles(requestedUserID)
+		if err != nil {
+			a.server.Logger().Printf("Database err: %v, Request ID: %s", requestID)
+			a.server.RespondError(w, r, http.StatusInternalServerError, nil)
+			return
+		}
+		a.server.Respond(w, r, http.StatusOK, &responseBody{User: userModel, Roles: userRoles})
+
 	}
 }
