@@ -66,6 +66,20 @@ func (r *Role) SetDescription(description *string) {
 	}
 }
 
+func (r *Role) Update(other *Role) {
+	r.RoleName = other.RoleName
+	r.RoleSpecifiedDescription = other.RoleSpecifiedDescription
+	r.AllowRolesCrud = other.AllowRolesCrud
+	r.AllowUsersCrud = other.AllowUsersCrud
+	r.AllowVeterinariansCrud = other.AllowVeterinariansCrud
+	r.AllowVaccinesCrud = other.AllowVaccinesCrud
+	r.AllowFoodCrud = other.AllowFoodCrud
+	r.AllowPetsCrud = other.AllowPetsCrud
+	r.AllowDatabaseDump = other.AllowDatabaseDump
+
+	r.BeforeCreate()
+}
+
 func (r Role) HasAllPermission(permissions ...Permission) bool {
 	for _, perm := range permissions {
 		if !reflect.ValueOf(r).FieldByName(perm.Name).Bool() {

@@ -17,6 +17,12 @@ type UserRepository interface {
 
 type RoleRepository interface {
 	SelectUserRoles(userID int) ([]models.Role, error)
+	SelectAll() ([]models.Role, error)
+	FindByName(roleName string) (*models.Role, error)
+	FindByID(roleID int) (*models.Role, error)
+	Create(role *models.Role) (*models.Role, error)
+	Update(newRole *models.Role) (*models.Role, error)
+	DeleteByID(roleID int) (*models.Role, error)
 }
 
 type DumpRepository interface {
