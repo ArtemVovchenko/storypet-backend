@@ -27,6 +27,7 @@ type Server struct {
 	databaseAPI *api.DatabaseAPI
 	sessionAPI  *api.SessionAPI
 	userAPI     *api.UserAPI
+	rolesAPI    *api.RolesAPI
 }
 
 func New() *Server {
@@ -41,6 +42,7 @@ func New() *Server {
 	server.databaseAPI = api.NewDatabaseAPI(server)
 	server.sessionAPI = api.NewSessionAPI(server)
 	server.userAPI = api.NewUserAPI(server)
+	server.rolesAPI = api.NewRolesAPI(server)
 	return server
 }
 
@@ -105,6 +107,7 @@ func (s *Server) configureRouter() {
 	s.databaseAPI.ConfigureRoutes(s.router)
 	s.sessionAPI.ConfigureRoutes(s.router)
 	s.userAPI.ConfigureRoutes(s.router)
+	s.rolesAPI.ConfigureRouter(s.router)
 }
 
 func (s *Server) configureStore() error {
