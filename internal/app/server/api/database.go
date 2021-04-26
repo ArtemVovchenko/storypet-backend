@@ -135,22 +135,28 @@ func (a *DatabaseAPI) ServeRequestByDumpName(w http.ResponseWriter, r *http.Requ
 }
 
 func (a *DatabaseAPI) ServeDumpingRequest(w http.ResponseWriter, r *http.Request) {
-	dumpRecord, err := a.server.DatabaseStore().Dumps().Make(a.server.DumpFilesFolder())
-	if err != nil {
-		a.server.RespondError(w, r, http.StatusServiceUnavailable, exceptions.DatabaseDumpFailed)
-		return
+	switch r.Method {
+	case http.MethodGet:
+		dumpRecord, err := a.server.DatabaseStore().Dumps().Make(a.server.DumpFilesFolder())
+		if err != nil {
+			a.server.RespondError(w, r, http.StatusServiceUnavailable, exceptions.DatabaseDumpFailed)
+			return
+		}
+		a.server.Respond(w, r, http.StatusOK, dumpRecord)
 	}
-	a.server.Respond(w, r, http.StatusOK, dumpRecord)
 }
 
 func (a *DatabaseAPI) ServeDumpDownloadRequest(w http.ResponseWriter, r *http.Request) {
-	dumpFileName := mux.Vars(r)["fileName"]
-	dumpRecord, err := a.server.DatabaseStore().Dumps().SelectByName(dumpFileName)
-	if err != nil || !filesutil.Exist(dumpRecord.FilePath) {
-		a.server.Respond(w, r, http.StatusNotFound, nil)
-		return
+	switch r.Method {
+	case http.MethodGet:
+		dumpFileName := mux.Vars(r)["fileName"]
+		dumpRecord, err := a.server.DatabaseStore().Dumps().SelectByName(dumpFileName)
+		if err != nil || !filesutil.Exist(dumpRecord.FilePath) {
+			a.server.Respond(w, r, http.StatusNotFound, nil)
+			return
+		}
+		w.Header().Set("Content-Type", "application/octet-stream")
+		w.Header().Set("Content-Disposition", fmt.Sprintf("attachment; filename=%s", dumpRecord.FileName))
+		http.ServeFile(w, r, dumpRecord.FilePath)
 	}
-	w.Header().Set("Content-Type", "application/octet-stream")
-	w.Header().Set("Content-Disposition", fmt.Sprintf("attachment; filename=%s", dumpRecord.FileName))
-	http.ServeFile(w, r, dumpRecord.FilePath)
 }
