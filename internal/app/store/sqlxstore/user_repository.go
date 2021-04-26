@@ -130,6 +130,15 @@ func (r *UserRepository) SelectAll() ([]models.User, error) {
 }
 
 func (r *UserRepository) Update(other *models.User) (*models.User, error) {
+	updateQuery := `
+		UPDATE public.users 
+		SET 
+			account_email = :account_email,
+			username = :username,
+			full_name = :full_name,
+			backup_email = :backup_email,
+			location = :location
+		WHERE user_id = :user_id`
 	current, err := r.store.Users().FindByID(other.UserID)
 	if err != nil {
 		r.store.logger.Println(err)
@@ -153,14 +162,7 @@ func (r *UserRepository) Update(other *models.User) (*models.User, error) {
 	}()
 
 	if _, err := transaction.NamedExec(
-		`UPDATE public.users 
-								  SET 
-									  account_email = :account_email,
-									  username = :username,
-									  full_name = :full_name, 
-									  backup_email = :backup_email, 
-									  location = :location
-								  WHERE user_id = :user_id`,
+		updateQuery,
 		current,
 	); err != nil {
 		r.store.logger.Println(err)
