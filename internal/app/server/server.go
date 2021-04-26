@@ -92,7 +92,11 @@ func (s *Server) Respond(w http.ResponseWriter, _ *http.Request, statusCode int,
 }
 
 func (s *Server) configureRouter() {
-	s.router.Use(handlers.CORS(handlers.AllowedOrigins([]string{"*"})))
+	headersOK := handlers.AllowedHeaders([]string{"X-Requested-With", "Content-Type", "X-Request-ID"})
+	originsOK := handlers.AllowedOrigins([]string{"*"})
+	methodsOK := handlers.AllowedMethods([]string{"GET", "POST", "OPTIONS", "DELETE", "PUT"})
+
+	s.router.Use(handlers.CORS(originsOK, headersOK, methodsOK))
 	s.router.Use(s.middleware.InfoMiddleware.MarkRequest)
 	s.router.Use(s.middleware.InfoMiddleware.LogRequest)
 	s.router.Use(s.middleware.ResponseWriting.JSONBody)
