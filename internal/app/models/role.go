@@ -24,7 +24,9 @@ type Permission struct {
 }
 
 // Permissions MUST HAVE all the bool permission fields of
-// models.Role structure. Any change of Permissions set must be updated
+// models.Role structure.
+//
+//Any change of Permissions set must be updated
 // in permissions package
 type Permissions struct {
 	RolesPermission         Permission

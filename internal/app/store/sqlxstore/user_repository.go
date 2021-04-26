@@ -117,6 +117,7 @@ func (r *UserRepository) FindByID(id int) (*models.User, error) {
 		r.store.logger.Println(err)
 		return nil, err
 	}
+	userEntity.AfterCreate()
 	return userEntity, nil
 }
 
