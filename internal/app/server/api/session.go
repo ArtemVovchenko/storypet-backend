@@ -2,17 +2,12 @@ package api
 
 import (
 	"encoding/json"
-	"errors"
+	"github.com/ArtemVovchenko/storypet-backend/internal/app/server/api/exceptions"
 	"github.com/ArtemVovchenko/storypet-backend/internal/app/sessions"
 	"github.com/ArtemVovchenko/storypet-backend/internal/pkg/auth"
 	"github.com/gorilla/mux"
 	"net/http"
 	"time"
-)
-
-var (
-	errIncorrectAuthData     = errors.New("incorrect email or password")
-	errIncorrectRefreshToken = errors.New("incorrect refresh token")
 )
 
 type SessionAPI struct {
@@ -28,28 +23,22 @@ func (a SessionAPI) ConfigureRoutes(router *mux.Router) {
 		Name("User Login").
 		Methods(http.MethodPost).
 		Handler(
-			a.server.Middleware().ResponseWriting.JSONBody(
-				a.ServeLoginRequest,
-			),
+			http.HandlerFunc(a.ServeLoginRequest),
 		)
 
 	router.Path("/api/session/refresh").
 		Name("Refresh token").
 		Methods(http.MethodPost).
 		Handler(
-			a.server.Middleware().ResponseWriting.JSONBody(
-				a.ServeRefreshRequest,
-			),
+			http.HandlerFunc(a.ServeRefreshRequest),
 		)
 
 	router.Path("/api/session").
 		Name("Session info").
 		Methods(http.MethodGet).
 		Handler(
-			a.server.Middleware().ResponseWriting.JSONBody(
-				a.server.Middleware().Authentication.IsAuthorised(
-					a.ServeSessionInfoRequest,
-				),
+			a.server.Middleware().Authentication.IsAuthorised(
+				http.HandlerFunc(a.ServeSessionInfoRequest),
 			),
 		)
 
@@ -57,10 +46,8 @@ func (a SessionAPI) ConfigureRoutes(router *mux.Router) {
 		Name("User Logout").
 		Methods(http.MethodPost).
 		Handler(
-			a.server.Middleware().ResponseWriting.JSONBody(
-				a.server.Middleware().Authentication.IsAuthorised(
-					a.ServeLogoutRequest,
-				),
+			a.server.Middleware().Authentication.IsAuthorised(
+				http.HandlerFunc(a.ServeLogoutRequest),
 			),
 		)
 }
@@ -79,12 +66,12 @@ func (a *SessionAPI) ServeLoginRequest(w http.ResponseWriter, r *http.Request) {
 
 	u, err := a.server.DatabaseStore().Users().FindByAccountEmail(rb.Email)
 	if err != nil {
-		a.server.Respond(w, r, http.StatusUnauthorized, errIncorrectAuthData)
+		a.server.Respond(w, r, http.StatusUnauthorized, exceptions.IncorrectAuthData)
 		return
 	}
 
 	if !u.ComparePasswords(rb.Password) {
-		a.server.Respond(w, r, http.StatusUnauthorized, errIncorrectAuthData)
+		a.server.Respond(w, r, http.StatusUnauthorized, exceptions.IncorrectAuthData)
 		return
 	}
 
@@ -131,13 +118,13 @@ func (a *SessionAPI) ServeRefreshRequest(w http.ResponseWriter, r *http.Request)
 
 	refreshMeta, err := auth.ExtractRefreshMeta(rb.Refresh)
 	if err != nil {
-		a.server.RespondError(w, r, http.StatusUnprocessableEntity, errIncorrectRefreshToken)
+		a.server.RespondError(w, r, http.StatusUnprocessableEntity, exceptions.IncorrectRefreshToken)
 		return
 	}
 
 	userID, err := a.server.PersistentStore().GetUserIDByRefreshUUID(refreshMeta.RefreshUUID)
 	if err != nil {
-		a.server.Respond(w, r, http.StatusUnprocessableEntity, errIncorrectRefreshToken)
+		a.server.Respond(w, r, http.StatusUnprocessableEntity, exceptions.IncorrectRefreshToken)
 		return
 	}
 

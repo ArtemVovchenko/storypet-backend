@@ -3,15 +3,14 @@ package middleware
 import (
 	"errors"
 	"github.com/ArtemVovchenko/storypet-backend/internal/app/permissions"
-	"github.com/ArtemVovchenko/storypet-backend/internal/pkg/auth"
 	"net/http"
 )
-
-var errAccessDenied = errors.New("access denied")
 
 type AccessPermissionMiddleware struct {
 	server server
 }
+
+var errAccessDenied = errors.New("access denied")
 
 func NewAccessPermissionMiddleware(server server) *AccessPermissionMiddleware {
 	return &AccessPermissionMiddleware{server: server}
@@ -19,12 +18,8 @@ func NewAccessPermissionMiddleware(server server) *AccessPermissionMiddleware {
 
 func (m *AccessPermissionMiddleware) FullAccess(next http.HandlerFunc) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
-		accessMeta, err := auth.ExtractAccessMeta(r)
-		if err != nil {
-			m.server.RespondError(w, r, http.StatusForbidden, errAccessDenied)
-			return
-		}
-		session, err := m.server.PersistentStore().GetSessionInfo(accessMeta.AccessUUID)
+		accessUUID := r.Context().Value(CtxAccessUUID).(string)
+		session, err := m.server.PersistentStore().GetSessionInfo(accessUUID)
 		if err != nil {
 			m.server.RespondError(w, r, http.StatusForbidden, errAccessDenied)
 			return
@@ -39,12 +34,8 @@ func (m *AccessPermissionMiddleware) FullAccess(next http.HandlerFunc) http.Hand
 
 func (m *AccessPermissionMiddleware) DatabaseAccess(next http.HandlerFunc) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
-		accessMeta, err := auth.ExtractAccessMeta(r)
-		if err != nil {
-			m.server.RespondError(w, r, http.StatusForbidden, errAccessDenied)
-			return
-		}
-		session, err := m.server.PersistentStore().GetSessionInfo(accessMeta.AccessUUID)
+		accessUUID := r.Context().Value(CtxAccessUUID).(string)
+		session, err := m.server.PersistentStore().GetSessionInfo(accessUUID)
 		if err != nil {
 			m.server.RespondError(w, r, http.StatusForbidden, errAccessDenied)
 			return

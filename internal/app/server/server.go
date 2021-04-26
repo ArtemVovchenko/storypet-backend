@@ -5,18 +5,19 @@ import (
 	"github.com/ArtemVovchenko/storypet-backend/internal/app/configs"
 	"github.com/ArtemVovchenko/storypet-backend/internal/app/middleware"
 	"github.com/ArtemVovchenko/storypet-backend/internal/app/server/api"
+	"github.com/ArtemVovchenko/storypet-backend/internal/app/sessions"
 	"github.com/ArtemVovchenko/storypet-backend/internal/app/store"
+	"github.com/gorilla/handlers"
 	"github.com/gorilla/mux"
 	"log"
 	"net/http"
-	"os"
 )
 
 type Server struct {
-	config    *configs.ServerConfig
-	logger    *log.Logger
-	errLogger *log.Logger
-	router    *mux.Router
+	config              *configs.ServerConfig
+	logger              *log.Logger
+	databaseStoreLogger *log.Logger
+	router              *mux.Router
 
 	databaseStore   store.DatabaseStore
 	persistentStore store.PersistentStore
@@ -31,10 +32,10 @@ type Server struct {
 func New() *Server {
 	config := configs.NewServerConfig()
 	server := &Server{
-		config:    config,
-		logger:    log.New(config.LogOutStream, config.LogPrefix, config.LogFlags),
-		errLogger: log.New(config.ErrLogOutStream, configs.SrvErrLogPrefix, configs.SrvErrLogFlags),
-		router:    mux.NewRouter(),
+		config:              config,
+		logger:              log.New(config.LogOutStream, config.LogPrefix, config.LogFlags),
+		databaseStoreLogger: log.New(config.DatabaseLogsOutStream, configs.DatabaseLogPrefix, configs.DatabaseLogFlags),
+		router:              mux.NewRouter(),
 	}
 	server.middleware = middleware.New(server)
 	server.databaseAPI = api.NewDatabaseAPI(server)
@@ -71,6 +72,10 @@ func (s *Server) DumpFilesFolder() string {
 	return s.config.DatabaseDumpsDir
 }
 
+func (s *Server) Logger() *log.Logger {
+	return s.logger
+}
+
 func (s *Server) RespondError(w http.ResponseWriter, r *http.Request, statusCode int, err error) {
 	if err != nil {
 		s.Respond(w, r, statusCode, map[string]string{"error": err.Error()})
@@ -87,14 +92,18 @@ func (s *Server) Respond(w http.ResponseWriter, _ *http.Request, statusCode int,
 }
 
 func (s *Server) configureRouter() {
+	s.router.Use(handlers.CORS(handlers.AllowedOrigins([]string{"*"})))
+	s.router.Use(s.middleware.InfoMiddleware.MarkRequest)
+	s.router.Use(s.middleware.InfoMiddleware.LogRequest)
+	s.router.Use(s.middleware.ResponseWriting.JSONBody)
+
 	s.databaseAPI.ConfigureRoutes(s.router)
 	s.sessionAPI.ConfigureRoutes(s.router)
 	s.userAPI.ConfigureRoutes(s.router)
 }
 
 func (s *Server) configureStore() error {
-	databaseLogger := log.New(os.Stdout, "DATABASE: ", log.LstdFlags)
-	database := store.NewDatabaseStore(databaseLogger)
+	database := store.NewDatabaseStore(s.databaseStoreLogger)
 	if err := database.Open(); err != nil {
 		return err
 	}
@@ -106,4 +115,15 @@ func (s *Server) configureStore() error {
 	}
 	s.persistentStore = persistentDatabase
 	return nil
+}
+
+func (s *Server) GetAuthorizedRequestInfo(r *http.Request) (string, *sessions.Session, error) {
+	requestID := r.Context().Value(middleware.CtxReqestUUID).(string)
+	accessID := r.Context().Value(middleware.CtxAccessUUID).(string)
+
+	session, err := s.persistentStore.GetSessionInfo(accessID)
+	if err != nil {
+		return "", nil, err
+	}
+	return requestID, session, nil
 }

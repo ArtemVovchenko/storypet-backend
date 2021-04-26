@@ -12,9 +12,9 @@ func NewResponseWriterMiddleware(server server) *ResponseWriterMiddleware {
 	return &ResponseWriterMiddleware{server: server}
 }
 
-func (r *ResponseWriterMiddleware) JSONBody(next http.HandlerFunc) http.HandlerFunc {
-	return func(w http.ResponseWriter, r *http.Request) {
+func (r *ResponseWriterMiddleware) JSONBody(next http.Handler) http.Handler {
+	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		w.Header().Set("Content-Type", "application/json")
-		next(w, r)
-	}
+		next.ServeHTTP(w, r)
+	})
 }

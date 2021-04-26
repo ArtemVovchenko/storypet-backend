@@ -3,6 +3,7 @@ package middleware
 import (
 	"errors"
 	"github.com/ArtemVovchenko/storypet-backend/internal/pkg/auth"
+	"golang.org/x/net/context"
 	"net/http"
 )
 
@@ -16,8 +17,8 @@ func newAuthentication(server server) *AuthenticationMiddleware {
 
 var errUnauthorized = errors.New("unauthorized")
 
-func (m *AuthenticationMiddleware) IsAuthorised(next http.HandlerFunc) http.HandlerFunc {
-	return func(w http.ResponseWriter, r *http.Request) {
+func (m *AuthenticationMiddleware) IsAuthorised(next http.Handler) http.Handler {
+	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		accessInfo, err := auth.ExtractAccessMeta(r)
 		if err != nil {
 			m.server.RespondError(w, r, http.StatusUnauthorized, errUnauthorized)
@@ -32,6 +33,6 @@ func (m *AuthenticationMiddleware) IsAuthorised(next http.HandlerFunc) http.Hand
 			m.server.RespondError(w, r, http.StatusUnauthorized, errUnauthorized)
 			return
 		}
-		next(w, r)
-	}
+		next.ServeHTTP(w, r.WithContext(context.WithValue(r.Context(), CtxAccessUUID, accessInfo.AccessUUID)))
+	})
 }
