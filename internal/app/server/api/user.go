@@ -1,11 +1,17 @@
 package api
 
 import (
+	"database/sql"
 	"encoding/json"
+	"errors"
 	"github.com/ArtemVovchenko/storypet-backend/internal/app/middleware"
 	"github.com/ArtemVovchenko/storypet-backend/internal/app/models"
+	"github.com/ArtemVovchenko/storypet-backend/internal/app/permissions"
+	"github.com/ArtemVovchenko/storypet-backend/internal/app/server/api/exceptions"
 	"github.com/gorilla/mux"
+	"github.com/lib/pq"
 	"net/http"
+	"strconv"
 )
 
 type UserAPI struct {
@@ -17,12 +23,33 @@ func NewUserAPI(server server) *UserAPI {
 }
 
 func (a *UserAPI) ConfigureRoutes(router *mux.Router) {
-	router.Path("/api/users").
+	router.Path("/api/register").
 		Name("User Register").
-		Methods(http.MethodGet, http.MethodPost).
-		HandlerFunc(
-			a.ServeRegistrationRequest,
-		)
+		Methods(http.MethodPost).
+		HandlerFunc(a.ServeRegistrationRequest)
+
+	sb := router.PathPrefix("/api/users").Subrouter()
+	sb.Use(a.server.Middleware().Authentication.IsAuthorised)
+
+	sb.Path("").
+		Name("Get All users").
+		Methods(http.MethodGet).
+		HandlerFunc(a.ServeRootRequest)
+
+	sb.Path("/password").
+		Name("Change Password").
+		Methods(http.MethodPost).
+		HandlerFunc(a.ServePasswordChangeRequest)
+
+	sb.Path("/{id:[0-9]+}").
+		Name("User By ID").
+		Methods(http.MethodGet, http.MethodPut, http.MethodDelete).
+		HandlerFunc(a.ServeRequestByID)
+
+	sb.Path("/{id:[0-9]+}/role").
+		Name("User Roles By ID").
+		Methods(http.MethodGet, http.MethodPost, http.MethodDelete).
+		HandlerFunc(a.ServeRoleRequest)
 }
 
 func (a *UserAPI) ServeRegistrationRequest(w http.ResponseWriter, r *http.Request) {
@@ -37,7 +64,7 @@ func (a *UserAPI) ServeRegistrationRequest(w http.ResponseWriter, r *http.Reques
 		}
 		userModels, err := a.server.DatabaseStore().Users().SelectAll()
 		if err != nil {
-			a.server.Logger().Printf("Reqest ID: %s database error: %v", requestUUID, err)
+			a.server.Logger().Printf("Request ID: %s database error: %v", requestUUID, err)
 			a.server.RespondError(w, r, http.StatusInternalServerError, nil)
 			return
 		}
@@ -75,4 +102,256 @@ func (a *UserAPI) ServeRegistrationRequest(w http.ResponseWriter, r *http.Reques
 		u.Sanitise()
 		a.server.Respond(w, r, http.StatusCreated, u)
 	}
+}
+
+func (a *UserAPI) ServeRootRequest(w http.ResponseWriter, r *http.Request) {
+	requestID := r.Context().Value(middleware.CtxReqestUUID).(string)
+	users, err := a.server.DatabaseStore().Users().SelectAll()
+	if err != nil {
+		a.server.Logger().Printf("Database err: %v, Request ID: %s", requestID)
+		a.server.RespondError(w, r, http.StatusInternalServerError, nil)
+		return
+	}
+	a.server.Respond(w, r, http.StatusOK, users)
+}
+
+func (a *UserAPI) ServeRequestByID(w http.ResponseWriter, r *http.Request) {
+	requestID, session, err := a.server.GetAuthorizedRequestInfo(r)
+	if err != nil {
+		a.server.RespondError(w, r, http.StatusInternalServerError, nil)
+		return
+	}
+
+	rawUserID, err := strconv.ParseInt(mux.Vars(r)["id"], 10, 64)
+	if err != nil {
+		a.server.RespondError(w, r, http.StatusBadRequest, exceptions.UnprocessableURIParam)
+		return
+	}
+	requestedUserID := int(rawUserID)
+
+	switch r.Method {
+	case http.MethodGet:
+		user, err := a.server.DatabaseStore().Users().FindByID(requestedUserID)
+		if err != nil {
+			if errors.Is(err, sql.ErrNoRows) {
+				a.server.RespondError(w, r, http.StatusNotFound, nil)
+				return
+			}
+			a.server.Logger().Printf("Database err: %v, Request ID: %s", requestID)
+			a.server.RespondError(w, r, http.StatusInternalServerError, nil)
+			return
+		}
+		a.server.Respond(w, r, http.StatusOK, user)
+
+	case http.MethodPut:
+		type requestBody struct {
+			UserID               int     `db:"user_id" json:"user_id"`
+			AccountEmail         string  `db:"account_email" json:"account_email"`
+			PasswordSHA256       string  `db:"password_sha256" json:"-"`
+			Username             string  `db:"username" json:"username"`
+			FullName             string  `db:"full_name" json:"full_name"`
+			SpecifiedBackupEmail *string `json:"backup_email"`
+			SpecifiedLocation    *string `json:"location"`
+		}
+
+		rb := &requestBody{}
+		if err := json.NewDecoder(r.Body).Decode(rb); err != nil {
+			a.server.RespondError(w, r, http.StatusBadRequest, err)
+			return
+		}
+
+		if requestedUserID != session.UserID {
+			if !permissions.AnyRoleHavePermissions(session.Roles, permissions.Permissions().UsersPermission) {
+				a.server.RespondError(w, r, http.StatusForbidden, nil)
+				return
+			}
+		}
+
+		userModel := &models.User{
+			UserID:       requestedUserID,
+			AccountEmail: rb.AccountEmail,
+			Username:     rb.Username,
+			FullName:     rb.PasswordSHA256,
+		}
+		userModel.SetBackupEmail(rb.SpecifiedBackupEmail)
+		userModel.SetLocation(rb.SpecifiedLocation)
+
+		newModel, err := a.server.DatabaseStore().Users().Update(userModel)
+		if err != nil {
+			a.server.Logger().Printf("Persistent database err: %v, Request ID: %s", requestID)
+			a.server.RespondError(w, r, http.StatusUnprocessableEntity, err)
+			return
+		}
+
+		a.server.Respond(w, r, http.StatusOK, newModel)
+
+	case http.MethodDelete:
+		if requestedUserID != session.UserID {
+			if !permissions.AnyRoleHavePermissions(session.Roles, permissions.Permissions().UsersPermission) {
+				a.server.RespondError(w, r, http.StatusForbidden, nil)
+				return
+			}
+		}
+
+		if _, err := a.server.DatabaseStore().Users().DeleteByID(requestedUserID); err != nil {
+			a.server.Logger().Printf("Database err: %v, Request ID: %s", requestID)
+			a.server.RespondError(w, r, http.StatusInternalServerError, err)
+			return
+		}
+
+		a.server.Respond(w, r, http.StatusNoContent, nil)
+	}
+}
+
+func (a *UserAPI) ServeRoleRequest(w http.ResponseWriter, r *http.Request) {
+	requestID, session, err := a.server.GetAuthorizedRequestInfo(r)
+	if err != nil {
+		a.server.RespondError(w, r, http.StatusInternalServerError, nil)
+		return
+	}
+	rawUserID, err := strconv.ParseInt(mux.Vars(r)["id"], 10, 64)
+	if err != nil {
+		a.server.RespondError(w, r, http.StatusBadRequest, exceptions.UnprocessableURIParam)
+		return
+	}
+	requestedUserID := int(rawUserID)
+
+	switch r.Method {
+	case http.MethodGet:
+		userRoles, err := a.server.DatabaseStore().Roles().SelectUserRoles(requestedUserID)
+		if err != nil {
+			if errors.Is(err, sql.ErrNoRows) {
+				a.server.RespondError(w, r, http.StatusNotFound, exceptions.RequestedUserNotFound)
+				return
+			}
+			a.server.Logger().Println(err)
+			a.server.RespondError(w, r, http.StatusInternalServerError, nil)
+			return
+		}
+		a.server.Respond(w, r, http.StatusOK, userRoles)
+
+	case http.MethodPost:
+		type requestBody struct {
+			RoleID int `json:"role_id"`
+		}
+		type responseBody struct {
+			User  *models.User  `json:"user"`
+			Roles []models.Role `json:"roles"`
+		}
+
+		if !permissions.AnyRoleHavePermissions(
+			session.Roles, permissions.Permissions().RolesPermission,
+			permissions.Permissions().UsersPermission,
+		) {
+			a.server.RespondError(w, r, http.StatusForbidden, nil)
+			return
+		}
+
+		rb := &requestBody{}
+		if err := json.NewDecoder(r.Body).Decode(rb); err != nil {
+			a.server.RespondError(w, r, http.StatusUnprocessableEntity, err)
+			return
+		}
+		if err := a.server.DatabaseStore().Users().AssignRole(requestedUserID, rb.RoleID); err != nil {
+			a.server.Logger().Printf("Database err: %v, Request ID: %s", requestID)
+			a.server.RespondError(w, r, http.StatusUnprocessableEntity, nil)
+			return
+		}
+		userModel, err := a.server.DatabaseStore().Users().FindByID(requestedUserID)
+		if err != nil {
+			a.server.Logger().Printf("Database err: %v, Request ID: %s", requestID)
+			a.server.RespondError(w, r, http.StatusInternalServerError, nil)
+			return
+		}
+		userRoles, err := a.server.DatabaseStore().Roles().SelectUserRoles(requestedUserID)
+		if err != nil {
+			a.server.Logger().Printf("Database err: %v, Request ID: %s", requestID)
+			a.server.RespondError(w, r, http.StatusInternalServerError, nil)
+			return
+		}
+		a.server.Respond(w, r, http.StatusOK, &responseBody{User: userModel, Roles: userRoles})
+
+	case http.MethodDelete:
+		type requestBody struct {
+			RoleID int `json:"role_id"`
+		}
+		type responseBody struct {
+			User  *models.User  `json:"user"`
+			Roles []models.Role `json:"roles"`
+		}
+
+		if !permissions.AnyRoleHavePermissions(
+			session.Roles, permissions.Permissions().RolesPermission,
+			permissions.Permissions().UsersPermission,
+		) {
+			a.server.RespondError(w, r, http.StatusForbidden, nil)
+			return
+		}
+
+		rb := &requestBody{}
+		if err := json.NewDecoder(r.Body).Decode(rb); err != nil {
+			a.server.RespondError(w, r, http.StatusUnprocessableEntity, err)
+			return
+		}
+		if err := a.server.DatabaseStore().Users().DeleteRole(requestedUserID, rb.RoleID); err != nil {
+			a.server.Logger().Printf("Database err: %v, Request ID: %s", requestID)
+			a.server.RespondError(w, r, http.StatusUnprocessableEntity, nil)
+			return
+		}
+		userModel, err := a.server.DatabaseStore().Users().FindByID(requestedUserID)
+		if err != nil {
+			a.server.Logger().Printf("Database err: %v, Request ID: %s", requestID)
+			a.server.RespondError(w, r, http.StatusInternalServerError, nil)
+			return
+		}
+		userRoles, err := a.server.DatabaseStore().Roles().SelectUserRoles(requestedUserID)
+		if err != nil {
+			a.server.Logger().Printf("Database err: %v, Request ID: %s", requestID)
+			a.server.RespondError(w, r, http.StatusInternalServerError, nil)
+			return
+		}
+		a.server.Respond(w, r, http.StatusOK, &responseBody{User: userModel, Roles: userRoles})
+
+	}
+}
+
+func (a *UserAPI) ServePasswordChangeRequest(w http.ResponseWriter, r *http.Request) {
+	type requestBody struct {
+		OldPassword string `json:"old_password"`
+		NewPassword string `json:"new_password"`
+	}
+
+	requestID, session, err := a.server.GetAuthorizedRequestInfo(r)
+	if err != nil {
+		a.server.RespondError(w, r, http.StatusInternalServerError, nil)
+		return
+	}
+
+	rb := &requestBody{}
+	if err := json.NewDecoder(r.Body).Decode(rb); err != nil {
+		a.server.RespondError(w, r, http.StatusBadRequest, err)
+		return
+	}
+
+	userModel, err := a.server.DatabaseStore().Users().FindByID(session.UserID)
+	if err != nil {
+		a.server.Logger().Printf("Database err: %v, Request ID: %s", requestID)
+		a.server.RespondError(w, r, http.StatusInternalServerError, nil)
+		return
+	}
+	if !userModel.ComparePasswords(rb.OldPassword) {
+		a.server.RespondError(w, r, http.StatusForbidden, exceptions.IncorrectOldPassword)
+		return
+	}
+	if err := a.server.DatabaseStore().Users().ChangePassword(userModel.UserID, rb.NewPassword); err != nil {
+		var pqErr pq.Error
+		if errors.As(err, &pqErr) {
+			a.server.Logger().Printf("Database err: %v, Request ID: %s", requestID)
+			a.server.RespondError(w, r, http.StatusInternalServerError, nil)
+			return
+		}
+		a.server.RespondError(w, r, http.StatusUnprocessableEntity, err)
+		return
+	}
+	a.server.Respond(w, r, http.StatusOK, nil)
 }

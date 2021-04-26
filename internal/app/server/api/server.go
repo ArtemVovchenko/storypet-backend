@@ -2,6 +2,7 @@ package api
 
 import (
 	"github.com/ArtemVovchenko/storypet-backend/internal/app/middleware"
+	"github.com/ArtemVovchenko/storypet-backend/internal/app/sessions"
 	"github.com/ArtemVovchenko/storypet-backend/internal/app/store"
 	"log"
 	"net/http"
@@ -19,4 +20,6 @@ type server interface {
 	Middleware() middleware.Middleware
 
 	DumpFilesFolder() string
+
+	GetAuthorizedRequestInfo(r *http.Request) (string, *sessions.Session, error)
 }

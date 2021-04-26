@@ -10,6 +10,9 @@ type UserRepository interface {
 	SelectAll() ([]models.User, error)
 	Update(other *models.User) (*models.User, error)
 	ChangePassword(userID int, newPassword string) error
+
+	AssignRole(userID int, roleID int) error
+	DeleteRole(userID int, roleID int) error
 }
 
 type RoleRepository interface {
