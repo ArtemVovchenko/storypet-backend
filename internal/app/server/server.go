@@ -100,6 +100,7 @@ func (s *Server) configureRouter() {
 	s.router.Use(s.middleware.InfoMiddleware.MarkRequest)
 	s.router.Use(s.middleware.InfoMiddleware.LogRequest)
 	s.router.Use(s.middleware.ResponseWriting.JSONBody)
+	s.router.Methods(http.MethodOptions)
 
 	s.databaseAPI.ConfigureRoutes(s.router)
 	s.sessionAPI.ConfigureRoutes(s.router)
