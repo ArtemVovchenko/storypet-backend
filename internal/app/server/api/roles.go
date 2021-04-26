@@ -120,6 +120,12 @@ func (a *RolesAPI) ServeIDRequest(w http.ResponseWriter, r *http.Request) {
 			AllowPetsCrud          bool    `json:"allow_pets_crud"`
 			AllowDatabaseDump      bool    `json:"allow_database_dump"`
 		}
+
+		if roleID > 0 && roleID < 5 {
+			a.server.RespondError(w, r, http.StatusForbidden, exceptions.CanNotUpdatePrimaryRole)
+			return
+		}
+
 		rb := &requestBody{}
 		if err := json.NewDecoder(r.Body).Decode(rb); err != nil {
 			a.server.RespondError(w, r, http.StatusBadRequest, err)
@@ -147,6 +153,10 @@ func (a *RolesAPI) ServeIDRequest(w http.ResponseWriter, r *http.Request) {
 		a.server.Respond(w, r, http.StatusOK, newModel)
 
 	case http.MethodDelete:
+		if roleID > 0 && roleID < 5 {
+			a.server.RespondError(w, r, http.StatusForbidden, exceptions.CanNotDeletePrimaryRole)
+			return
+		}
 		_, err := a.server.DatabaseStore().Roles().DeleteByID(roleID)
 		if err != nil {
 			if errors.Is(err, sql.ErrNoRows) {
