@@ -13,4 +13,6 @@ var (
 	IncorrectRefreshToken = errors.New("incorrect refresh token")
 
 	RequestedUserNotFound = errors.New("no user with requested id")
+
+	IncorrectOldPassword = errors.New("incorrect old password")
 )

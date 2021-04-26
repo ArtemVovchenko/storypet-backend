@@ -9,6 +9,7 @@ import (
 	"github.com/ArtemVovchenko/storypet-backend/internal/app/permissions"
 	"github.com/ArtemVovchenko/storypet-backend/internal/app/server/api/exceptions"
 	"github.com/gorilla/mux"
+	"github.com/lib/pq"
 	"net/http"
 	"strconv"
 )
@@ -35,13 +36,18 @@ func (a *UserAPI) ConfigureRoutes(router *mux.Router) {
 		Methods(http.MethodGet).
 		HandlerFunc(a.ServeRootRequest)
 
+	sb.Path("/password").
+		Name("Change Password").
+		Methods(http.MethodPost).
+		HandlerFunc(a.ServePasswordChangeRequest)
+
 	sb.Path("/{id:[0-9]+}").
 		Name("User By ID").
 		Methods(http.MethodGet, http.MethodPut, http.MethodDelete).
 		HandlerFunc(a.ServeRequestByID)
 
 	sb.Path("/{id:[0-9]+}/role").
-		Name("User By ID").
+		Name("User Roles By ID").
 		Methods(http.MethodGet, http.MethodPost, http.MethodDelete).
 		HandlerFunc(a.ServeRoleRequest)
 }
@@ -118,7 +124,7 @@ func (a *UserAPI) ServeRequestByID(w http.ResponseWriter, r *http.Request) {
 
 	rawUserID, err := strconv.ParseInt(mux.Vars(r)["id"], 10, 64)
 	if err != nil {
-		a.server.RespondError(w, r, http.StatusInternalServerError, exceptions.UnprocessableURIParam)
+		a.server.RespondError(w, r, http.StatusBadRequest, exceptions.UnprocessableURIParam)
 		return
 	}
 	requestedUserID := int(rawUserID)
@@ -201,10 +207,11 @@ func (a *UserAPI) ServeRoleRequest(w http.ResponseWriter, r *http.Request) {
 	requestID, session, err := a.server.GetAuthorizedRequestInfo(r)
 	if err != nil {
 		a.server.RespondError(w, r, http.StatusInternalServerError, nil)
+		return
 	}
 	rawUserID, err := strconv.ParseInt(mux.Vars(r)["id"], 10, 64)
 	if err != nil {
-		a.server.RespondError(w, r, http.StatusInternalServerError, exceptions.UnprocessableURIParam)
+		a.server.RespondError(w, r, http.StatusBadRequest, exceptions.UnprocessableURIParam)
 		return
 	}
 	requestedUserID := int(rawUserID)
@@ -306,4 +313,45 @@ func (a *UserAPI) ServeRoleRequest(w http.ResponseWriter, r *http.Request) {
 		a.server.Respond(w, r, http.StatusOK, &responseBody{User: userModel, Roles: userRoles})
 
 	}
+}
+
+func (a *UserAPI) ServePasswordChangeRequest(w http.ResponseWriter, r *http.Request) {
+	type requestBody struct {
+		OldPassword string `json:"old_password"`
+		NewPassword string `json:"new_password"`
+	}
+
+	requestID, session, err := a.server.GetAuthorizedRequestInfo(r)
+	if err != nil {
+		a.server.RespondError(w, r, http.StatusInternalServerError, nil)
+		return
+	}
+
+	rb := &requestBody{}
+	if err := json.NewDecoder(r.Body).Decode(rb); err != nil {
+		a.server.RespondError(w, r, http.StatusBadRequest, err)
+		return
+	}
+
+	userModel, err := a.server.DatabaseStore().Users().FindByID(session.UserID)
+	if err != nil {
+		a.server.Logger().Printf("Database err: %v, Request ID: %s", requestID)
+		a.server.RespondError(w, r, http.StatusInternalServerError, nil)
+		return
+	}
+	if !userModel.ComparePasswords(rb.OldPassword) {
+		a.server.RespondError(w, r, http.StatusForbidden, exceptions.IncorrectOldPassword)
+		return
+	}
+	if err := a.server.DatabaseStore().Users().ChangePassword(userModel.UserID, rb.NewPassword); err != nil {
+		var pqErr pq.Error
+		if errors.As(err, &pqErr) {
+			a.server.Logger().Printf("Database err: %v, Request ID: %s", requestID)
+			a.server.RespondError(w, r, http.StatusInternalServerError, nil)
+			return
+		}
+		a.server.RespondError(w, r, http.StatusUnprocessableEntity, err)
+		return
+	}
+	a.server.Respond(w, r, http.StatusOK, nil)
 }
