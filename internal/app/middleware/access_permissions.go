@@ -47,3 +47,19 @@ func (m *AccessPermissionMiddleware) DatabaseAccess(next http.HandlerFunc) http.
 		next(w, r)
 	}
 }
+
+func (m *AccessPermissionMiddleware) RolesAccess(next http.Handler) http.Handler {
+	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		accessUUID := r.Context().Value(CtxAccessUUID).(string)
+		session, err := m.server.PersistentStore().GetSessionInfo(accessUUID)
+		if err != nil {
+			m.server.RespondError(w, r, http.StatusForbidden, errAccessDenied)
+			return
+		}
+		if !permissions.AnyRoleHavePermissions(session.Roles, permissions.Permissions().RolesPermission) {
+			m.server.RespondError(w, r, http.StatusForbidden, errAccessDenied)
+			return
+		}
+		next.ServeHTTP(w, r)
+	})
+}
