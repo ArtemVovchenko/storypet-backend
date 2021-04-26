@@ -53,7 +53,7 @@ func (r *Role) BeforeCreate() {
 }
 
 func (r *Role) CheckNullableData() {
-	if r.RoleDescription.Valid {
+	if r.RoleDescription != nil && r.RoleDescription.Valid {
 		r.RoleSpecifiedDescription = r.RoleDescription.String
 	}
 }

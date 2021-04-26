@@ -30,10 +30,10 @@ func (a *RolesAPI) ConfigureRouter(router *mux.Router) {
 		Methods(http.MethodGet, http.MethodPost, http.MethodOptions).
 		HandlerFunc(a.ServeRootRequest)
 
-	sb.Path("").
+	sb.Path("/{id:[0-9]+}").
 		Name("Roles by ID").
 		Methods(http.MethodGet, http.MethodPut, http.MethodDelete, http.MethodOptions).
-		HandlerFunc(a.ServeRootRequest)
+		HandlerFunc(a.ServeIDRequest)
 }
 
 func (a *RolesAPI) ServeRootRequest(w http.ResponseWriter, r *http.Request) {
@@ -146,6 +146,10 @@ func (a *RolesAPI) ServeIDRequest(w http.ResponseWriter, r *http.Request) {
 		roleModel.BeforeCreate()
 		newModel, err := a.server.DatabaseStore().Roles().Update(roleModel)
 		if err != nil {
+			if errors.Is(err, sql.ErrNoRows) {
+				a.server.RespondError(w, r, http.StatusNotFound, nil)
+				return
+			}
 			a.server.Logger().Println(err)
 			a.server.RespondError(w, r, http.StatusUnprocessableEntity, nil)
 			return
