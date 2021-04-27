@@ -13,6 +13,11 @@ type UserRepository interface {
 
 	AssignRole(userID int, roleID int) error
 	DeleteRole(userID int, roleID int) error
+
+	SelectClinicByUserID(userID int) (*models.VetClinic, error)
+	CreateClinic(clinic *models.VetClinic) (*models.VetClinic, error)
+	UpdateClinic(clinic *models.VetClinic) (*models.VetClinic, error)
+	DeleteClinic(userID int) (*models.VetClinic, error)
 }
 
 type RoleRepository interface {

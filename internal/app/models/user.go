@@ -20,6 +20,12 @@ type User struct {
 	SpecifiedLocation    string          `json:"location,omitempty"`
 }
 
+type VetClinic struct {
+	UserID     int    `json:"user_id" db:"user_id"`
+	ClinicID   string `json:"clinic_id" db:"clinic_id"`
+	ClinicName string `json:"clinic_name" db:"clinic_name"`
+}
+
 func (u *User) BeforeCreate() error {
 	if len(u.Password) > 0 {
 		enc, err := encryptString(u.Password)

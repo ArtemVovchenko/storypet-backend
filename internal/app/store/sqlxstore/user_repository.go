@@ -265,3 +265,104 @@ func (r *UserRepository) DeleteRole(userID int, roleID int) error {
 	}
 	return nil
 }
+
+func (r *UserRepository) SelectClinicByUserID(userID int) (*models.VetClinic, error) {
+	selectQuery := `SELECT * FROM public.veterinarians_clinic WHERE user_id = $1;`
+	model := &models.VetClinic{}
+	if err := r.store.db.Get(model, selectQuery, userID); err != nil {
+		r.store.logger.Println(err)
+		return nil, err
+	}
+	return model, nil
+}
+
+func (r *UserRepository) CreateClinic(clinic *models.VetClinic) (*models.VetClinic, error) {
+	insertQuery := `
+		INSERT INTO 
+			public.veterinarians_clinic (user_id, clinic_name, clinic_id) 
+		VALUES 
+			(:user_id, :clinic_name, clinic_id);`
+
+	transaction, err := r.store.db.Beginx()
+	if err != nil {
+		r.store.logger.Println(err)
+		return nil, err
+	}
+	defer func() {
+		_ = transaction.Rollback()
+	}()
+
+	if _, err := transaction.NamedExec(insertQuery, clinic); err != nil {
+		r.store.logger.Println(err)
+		return nil, err
+	}
+
+	if err := transaction.Commit(); err != nil {
+		r.store.logger.Println(err)
+		return nil, err
+	}
+
+	created, err := r.SelectClinicByUserID(clinic.UserID)
+	return created, err
+}
+
+func (r *UserRepository) UpdateClinic(clinic *models.VetClinic) (*models.VetClinic, error) {
+	updateQuery := `
+		UPDATE public.veterinarians_clinic
+		SET 
+			clinic_id = :clinic_id,
+			clinic_name = :clinic_name
+		WHERE user_id = :user_id;`
+	transaction, err := r.store.db.Beginx()
+	if err != nil {
+		r.store.logger.Println(err)
+		return nil, err
+	}
+	defer func() {
+		_ = transaction.Rollback()
+	}()
+
+	if _, err := transaction.NamedExec(updateQuery, clinic); err != nil {
+		r.store.logger.Println(err)
+		return nil, err
+	}
+
+	if err := transaction.Commit(); err != nil {
+		r.store.logger.Println(err)
+		return nil, err
+	}
+
+	updated, err := r.SelectClinicByUserID(clinic.UserID)
+	return updated, err
+}
+
+func (r *UserRepository) DeleteClinic(userID int) (*models.VetClinic, error) {
+	deleteQuery := `DELETE FROM public.veterinarians_clinic WHERE user_id = $1`
+
+	deletedModel, err := r.SelectClinicByUserID(userID)
+	if err != nil {
+		r.store.logger.Println(err)
+		return nil, err
+	}
+
+	transaction, err := r.store.db.Beginx()
+	if err != nil {
+		r.store.logger.Println(err)
+		return nil, err
+	}
+	defer func() {
+		_ = transaction.Rollback()
+	}()
+
+	if _, err := transaction.Exec(deleteQuery, userID); err != nil {
+		r.store.logger.Println(err)
+		return nil, err
+	}
+
+	if err := transaction.Commit(); err != nil {
+		r.store.logger.Println(err)
+		return nil, err
+	}
+
+	return deletedModel, nil
+}
