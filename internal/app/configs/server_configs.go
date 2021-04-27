@@ -9,7 +9,7 @@ var (
 	SrvPort      = os.Getenv("PORT")
 	SrvLogStream = os.Stdout
 	SrvLogFlags  = log.LstdFlags
-	SrvLogPrefix = "SRV:"
+	SrvLogPrefix = "SERVER: "
 
 	DatabaseLogStream = os.Stderr
 	DatabaseLogFlags  = log.Llongfile | log.LstdFlags

@@ -12,6 +12,9 @@ func (r *PetRepository) SelectAll() ([]models.Pet, error) {
 		r.store.logger.Println(err)
 		return nil, err
 	}
+	for idx := range petModels {
+		petModels[idx].AfterCreate()
+	}
 	return petModels, nil
 }
 
@@ -40,9 +43,9 @@ func (r *PetRepository) FindByID(petID int) (*models.Pet, error) {
 func (r *PetRepository) CreatePet(pet *models.Pet) (*models.Pet, error) {
 	createQuery := `
 		INSERT INTO 
-			public.pets (name, user_id, veterinar_id, pet_type, breed, family_name, mother_id, father_id) 
+			public.pets (name, user_id, veterinarian_id, pet_type, breed, family_name, mother_id, father_id) 
 		VALUES 
-			(:name, :user_id, :veterinar_id, :pet_type, :breed, :family_name, :mother_id, :father_id);`
+			(:name, :user_id, :veterinarian_id, :pet_type, :breed, :family_name, :mother_id, :father_id);`
 	transaction, err := r.store.db.Beginx()
 	if err != nil {
 		r.store.logger.Println(err)
@@ -71,7 +74,7 @@ func (r *PetRepository) UpdatePet(pet *models.Pet) (*models.Pet, error) {
 			name = :name,
 		    pet_type = :pet_type,
 			user_id = :user_id,
-			veterinar_id = :veterinar_id,
+			veterinarian_id = :veterinarian_id,
 			breed = :breed,
 			family_name = :family_name,
 			mother_id = :mother_id,
@@ -181,7 +184,7 @@ func (r *PetRepository) CreatePetType(petType *models.PetType) (*models.PetType,
 		_ = transaction.Rollback()
 	}()
 
-	if _, err := transaction.Exec(insertQuery, petType); err != nil {
+	if _, err := transaction.NamedExec(insertQuery, petType); err != nil {
 		r.store.logger.Println(err)
 		return nil, err
 	}

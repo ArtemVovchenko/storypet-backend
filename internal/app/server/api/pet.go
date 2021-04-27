@@ -56,7 +56,7 @@ func (a *PetsAPI) ServeRootRequest(w http.ResponseWriter, r *http.Request) {
 	case http.MethodGet:
 		pets, err := a.server.DatabaseStore().Pets().SelectAll()
 		if err != nil {
-			a.server.Logger().Printf("Database err: %v, Request ID: %s", requestID)
+			a.server.Logger().Printf("Database err: %v, Request ID: %v", err, requestID)
 			a.server.RespondError(w, r, http.StatusInternalServerError, nil)
 			return
 		}
@@ -76,6 +76,7 @@ func (a *PetsAPI) ServeRootRequest(w http.ResponseWriter, r *http.Request) {
 		rb := &requestBody{}
 		if err := json.NewDecoder(r.Body).Decode(rb); err != nil {
 			a.server.RespondError(w, r, http.StatusBadRequest, err)
+			return
 		}
 		newPetModel := &models.Pet{
 			Name:    rb.Name,
@@ -89,6 +90,19 @@ func (a *PetsAPI) ServeRootRequest(w http.ResponseWriter, r *http.Request) {
 			}
 			petOwner = *rb.UserID
 		}
+
+		if rb.VeterinarianID != nil {
+			specifiedVetRoles, err := a.server.DatabaseStore().Roles().SelectUserRoles(*rb.VeterinarianID)
+			if err != nil {
+				a.server.Respond(w, r, http.StatusUnprocessableEntity, exceptions.UserIsNotVeterinarian)
+				return
+			}
+			if !permissions.AnyRoleIsVeterinarian(specifiedVetRoles) {
+				a.server.Respond(w, r, http.StatusUnprocessableEntity, exceptions.UserIsNotVeterinarian)
+				return
+			}
+		}
+
 		newPetModel.UserID = petOwner
 		newPetModel.SetSpecifiedBreed(rb.Breed)
 		newPetModel.SetSpecifiedFamilyName(rb.FamilyName)
@@ -96,16 +110,18 @@ func (a *PetsAPI) ServeRootRequest(w http.ResponseWriter, r *http.Request) {
 		newPetModel.SetSpecifiedMotherID(rb.MotherID)
 		newPetModel.SetSpecifiedVeterinarianID(rb.VeterinarianID)
 		newPetModel.BeforeCreate()
+
 		if err := newPetModel.Validate(); err != nil {
 			a.server.RespondError(w, r, http.StatusUnprocessableEntity, err)
 			return
 		}
-		if _, err := a.server.DatabaseStore().Pets().CreatePet(newPetModel); err != nil {
-			a.server.Logger().Printf("Database err: %v, Request ID: %s", requestID)
+		newPetModel, err := a.server.DatabaseStore().Pets().CreatePet(newPetModel)
+		if err != nil {
+			a.server.Logger().Printf("Database err: %v, Request ID: %v", err, requestID)
 			a.server.RespondError(w, r, http.StatusUnprocessableEntity, nil)
 			return
 		}
-		a.server.Respond(w, r, http.StatusCreated, nil)
+		a.server.Respond(w, r, http.StatusCreated, newPetModel)
 	}
 }
 
@@ -130,7 +146,7 @@ func (a *PetsAPI) ServeIDRequest(w http.ResponseWriter, r *http.Request) {
 				a.server.RespondError(w, r, http.StatusNotFound, nil)
 				return
 			}
-			a.server.Logger().Printf("Database err: %v, Request ID: %s", requestID)
+			a.server.Logger().Printf("Database err: %v, Request ID: %v", err, requestID)
 			a.server.RespondError(w, r, http.StatusInternalServerError, nil)
 			return
 		}
@@ -150,14 +166,12 @@ func (a *PetsAPI) ServeIDRequest(w http.ResponseWriter, r *http.Request) {
 		updatingPet, err := a.server.DatabaseStore().Pets().FindByID(requestedID)
 		if err != nil {
 			if errors.Is(err, sql.ErrNoRows) {
-				if errors.Is(err, sql.ErrNoRows) {
-					a.server.RespondError(w, r, http.StatusNotFound, nil)
-					return
-				}
-				a.server.Logger().Printf("Database err: %v, Request ID: %s", requestID)
-				a.server.RespondError(w, r, http.StatusInternalServerError, nil)
+				a.server.RespondError(w, r, http.StatusNotFound, nil)
 				return
 			}
+			a.server.Logger().Printf("Database err: %v, Request ID: %v", err, requestID)
+			a.server.RespondError(w, r, http.StatusInternalServerError, nil)
+			return
 		}
 
 		if updatingPet.UserID != session.UserID {
@@ -170,6 +184,7 @@ func (a *PetsAPI) ServeIDRequest(w http.ResponseWriter, r *http.Request) {
 		rb := &requestBody{}
 		if err := json.NewDecoder(r.Body).Decode(rb); err != nil {
 			a.server.RespondError(w, r, http.StatusBadRequest, err)
+			return
 		}
 
 		newPetModel := &models.Pet{
@@ -184,6 +199,18 @@ func (a *PetsAPI) ServeIDRequest(w http.ResponseWriter, r *http.Request) {
 				return
 			}
 			petOwner = *rb.UserID
+		}
+
+		if rb.VeterinarianID != nil && *rb.VeterinarianID != 0 {
+			specifiedVetRoles, err := a.server.DatabaseStore().Roles().SelectUserRoles(*rb.VeterinarianID)
+			if err != nil {
+				a.server.Respond(w, r, http.StatusUnprocessableEntity, exceptions.UserIsNotVeterinarian)
+				return
+			}
+			if !permissions.AnyRoleIsVeterinarian(specifiedVetRoles) {
+				a.server.Respond(w, r, http.StatusUnprocessableEntity, exceptions.UserIsNotVeterinarian)
+				return
+			}
 		}
 
 		newPetModel.UserID = petOwner
@@ -203,7 +230,7 @@ func (a *PetsAPI) ServeIDRequest(w http.ResponseWriter, r *http.Request) {
 
 		updated, err := a.server.DatabaseStore().Pets().UpdatePet(updatingPet)
 		if err != nil {
-			a.server.Logger().Printf("Database err: %v, Request ID: %s", requestID)
+			a.server.Logger().Printf("Database err: %v, Request ID: %v", err, requestID)
 			a.server.RespondError(w, r, http.StatusUnprocessableEntity, nil)
 			return
 		}
@@ -213,14 +240,12 @@ func (a *PetsAPI) ServeIDRequest(w http.ResponseWriter, r *http.Request) {
 		deletingPet, err := a.server.DatabaseStore().Pets().FindByID(requestedID)
 		if err != nil {
 			if errors.Is(err, sql.ErrNoRows) {
-				if errors.Is(err, sql.ErrNoRows) {
-					a.server.RespondError(w, r, http.StatusNotFound, nil)
-					return
-				}
-				a.server.Logger().Printf("Database err: %v, Request ID: %s", requestID)
-				a.server.RespondError(w, r, http.StatusInternalServerError, nil)
+				a.server.RespondError(w, r, http.StatusNotFound, nil)
 				return
 			}
+			a.server.Logger().Printf("Database err: %v, Request ID: %v", err, requestID)
+			a.server.RespondError(w, r, http.StatusInternalServerError, nil)
+			return
 		}
 
 		if deletingPet.UserID != session.UserID {
@@ -230,7 +255,7 @@ func (a *PetsAPI) ServeIDRequest(w http.ResponseWriter, r *http.Request) {
 			}
 		}
 		if _, err := a.server.DatabaseStore().Pets().DeleteByID(requestedID); err != nil {
-			a.server.Logger().Printf("Database err: %v, Request ID: %s", requestID)
+			a.server.Logger().Printf("Database err: %v, Request ID: %v", err, requestID)
 			a.server.RespondError(w, r, http.StatusUnprocessableEntity, nil)
 			return
 		}
@@ -249,7 +274,7 @@ func (a *PetsAPI) ServeTypesRootRequest(w http.ResponseWriter, r *http.Request) 
 	case http.MethodGet:
 		typesModels, err := a.server.DatabaseStore().Pets().SelectAllTypes()
 		if err != nil {
-			a.server.Logger().Printf("Database err: %v, Request ID: %s", requestID)
+			a.server.Logger().Printf("Database err: %v, Request ID: %v", err, requestID)
 			a.server.RespondError(w, r, http.StatusInternalServerError, nil)
 			return
 		}
@@ -277,12 +302,13 @@ func (a *PetsAPI) ServeTypesRootRequest(w http.ResponseWriter, r *http.Request) 
 			a.server.RespondError(w, r, http.StatusUnprocessableEntity, err)
 			return
 		}
-		if _, err := a.server.DatabaseStore().Pets().CreatePetType(newPetType); err != nil {
-			a.server.Logger().Printf("Database err: %v, Request ID: %s", requestID)
+		newPetType, err := a.server.DatabaseStore().Pets().CreatePetType(newPetType)
+		if err != nil {
+			a.server.Logger().Printf("Database err: %v, Request ID: %v", err, requestID)
 			a.server.RespondError(w, r, http.StatusUnprocessableEntity, nil)
 			return
 		}
-		a.server.Respond(w, r, http.StatusCreated, nil)
+		a.server.Respond(w, r, http.StatusCreated, newPetType)
 	}
 }
 
@@ -307,7 +333,7 @@ func (a *PetsAPI) ServeTypesIDRequest(w http.ResponseWriter, r *http.Request) {
 				a.server.RespondError(w, r, http.StatusNotFound, nil)
 				return
 			}
-			a.server.Logger().Printf("Database err: %v, Request ID: %s", requestID)
+			a.server.Logger().Printf("Database err: %v, Request ID: %v", err, requestID)
 			a.server.RespondError(w, r, http.StatusInternalServerError, nil)
 			return
 		}
@@ -342,7 +368,7 @@ func (a *PetsAPI) ServeTypesIDRequest(w http.ResponseWriter, r *http.Request) {
 				a.server.RespondError(w, r, http.StatusNotFound, nil)
 				return
 			}
-			a.server.Logger().Printf("Database err: %v, Request ID: %s", requestID)
+			a.server.Logger().Printf("Database err: %v, Request ID: %v", err, requestID)
 			a.server.RespondError(w, r, http.StatusUnprocessableEntity, nil)
 			return
 		}
@@ -358,7 +384,7 @@ func (a *PetsAPI) ServeTypesIDRequest(w http.ResponseWriter, r *http.Request) {
 				a.server.RespondError(w, r, http.StatusNotFound, nil)
 				return
 			}
-			a.server.Logger().Printf("Database err: %v, Request ID: %s", requestID)
+			a.server.Logger().Printf("Database err: %v, Request ID: %v", err, requestID)
 			a.server.RespondError(w, r, http.StatusInternalServerError, nil)
 			return
 		}

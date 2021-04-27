@@ -3,7 +3,6 @@ package models
 import (
 	"database/sql"
 	validation "github.com/go-ozzo/ozzo-validation"
-	"github.com/go-ozzo/ozzo-validation/is"
 	"time"
 )
 
@@ -52,7 +51,8 @@ type Pet struct {
 
 func (p *Pet) Validate() error {
 	return validation.ValidateStruct(p,
-		validation.Field(&p.Name, validation.Required, is.Alpha))
+		validation.Field(&p.Name, validation.Required, validation.Length(2, 30)),
+		validation.Field(&p.PetType, validation.Required))
 }
 
 func (p *Pet) BeforeCreate() {
@@ -190,7 +190,7 @@ func (p *Pet) SetSpecifiedBreed(breed *string) {
 
 func (p *Pet) SetSpecifiedFamilyName(name *string) {
 	if name != nil {
-		p.SpecifiedBreed = *name
+		p.SpecifiedFamilyName = *name
 	}
 }
 
