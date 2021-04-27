@@ -22,6 +22,7 @@ func (r *PetRepository) FindByNameAndOwner(name string, ownerID int) (*models.Pe
 		r.store.logger.Println(err)
 		return nil, err
 	}
+	petModel.AfterCreate()
 	return petModel, nil
 }
 
@@ -32,6 +33,7 @@ func (r *PetRepository) FindByID(petID int) (*models.Pet, error) {
 		r.store.logger.Println(err)
 		return nil, err
 	}
+	petModel.AfterCreate()
 	return petModel, nil
 }
 
@@ -104,6 +106,7 @@ func (r *PetRepository) UpdatePet(pet *models.Pet) (*models.Pet, error) {
 	if err := transaction.Commit(); err != nil {
 		return nil, err
 	}
+	updatingPet.AfterCreate()
 	return updatingPet, nil
 }
 
@@ -129,6 +132,7 @@ func (r *PetRepository) DeleteByID(petID int) (*models.Pet, error) {
 	if err := transaction.Commit(); err != nil {
 		return nil, err
 	}
+	deletingPet.AfterCreate()
 	return deletingPet, nil
 }
 
