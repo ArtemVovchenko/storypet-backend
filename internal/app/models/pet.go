@@ -23,7 +23,8 @@ func (p *PetType) Validate() error {
 
 type Pet struct {
 	PetID          int             `json:"pet_id" db:"pet_id"`
-	Name           int             `json:"name" db:"name"`
+	Name           string          `json:"name" db:"name"`
+	UserID         int             `json:"user_id" db:"user_id"`
 	MotherVerified bool            `json:"mother_verified" db:"mother_verified"`
 	FatherVerified bool            `json:"father_verified" db:"father_verified"`
 	MotherID       *sql.NullInt64  `json:"-" db:"mother_id"`
@@ -32,15 +33,16 @@ type Pet struct {
 	Breed          *sql.NullString `json:"-" db:"breed"`
 	FamilyName     *sql.NullString `json:"-" db:"family_name"`
 
-	SpecifiedMotherID       int     `json:"mother_id,omitempty"`
-	SpecifiedFatherID       int     `json:"father_id,omitempty"`
-	SpecifiedVeterinarianID int     `json:"veterinarian_id,omitempty"`
-	SpecifiedBreed          *string `json:"breed,omitempty"`
-	SpecifiedFamilyName     *string `json:"family_name,omitempty"`
+	SpecifiedMotherID       int    `json:"mother_id,omitempty"`
+	SpecifiedFatherID       int    `json:"father_id,omitempty"`
+	SpecifiedVeterinarianID int    `json:"veterinarian_id,omitempty"`
+	SpecifiedBreed          string `json:"breed,omitempty"`
+	SpecifiedFamilyName     string `json:"family_name,omitempty"`
 }
 
 func (p *Pet) Validate() error {
-	return validation.ValidateStruct(p, validation.Field(&p.Name, validation.Required, is.Alpha))
+	return validation.ValidateStruct(p,
+		validation.Field(&p.Name, validation.Required, is.Alpha))
 }
 
 func (p *Pet) BeforeCreate() {
@@ -62,15 +64,15 @@ func (p *Pet) BeforeCreate() {
 			Valid: true,
 		}
 	}
-	if p.SpecifiedBreed != nil {
+	if p.SpecifiedBreed != "" {
 		p.Breed = &sql.NullString{
-			String: *p.SpecifiedBreed,
+			String: p.SpecifiedBreed,
 			Valid:  true,
 		}
 	}
-	if p.SpecifiedFamilyName != nil {
+	if p.SpecifiedFamilyName != "" {
 		p.FamilyName = &sql.NullString{
-			String: *p.SpecifiedFamilyName,
+			String: p.SpecifiedFamilyName,
 			Valid:  true,
 		}
 	}
@@ -79,10 +81,10 @@ func (p *Pet) BeforeCreate() {
 
 func (p *Pet) AfterCreate() {
 	if p.Breed != nil && p.Breed.Valid {
-		p.SpecifiedBreed = &p.Breed.String
+		p.SpecifiedBreed = p.Breed.String
 	}
 	if p.FamilyName != nil && p.FamilyName.Valid {
-		p.SpecifiedFamilyName = &p.FamilyName.String
+		p.SpecifiedFamilyName = p.FamilyName.String
 	}
 	if p.VeterinarianID != nil && p.VeterinarianID.Valid {
 		p.SpecifiedVeterinarianID = int(p.VeterinarianID.Int64)
@@ -92,6 +94,60 @@ func (p *Pet) AfterCreate() {
 	}
 	if p.FatherID != nil && p.FatherID.Valid {
 		p.SpecifiedFatherID = int(p.FatherID.Int64)
+	}
+}
+
+func (p *Pet) Update(other *Pet) {
+	// TODO: Model provides a part of business logic (verification of parents). Fix it after LB
+	if other.Name != "" && p.Name != other.Name {
+		p.Name = other.Name
+	}
+	if other.UserID != 0 && p.UserID != other.UserID {
+		p.UserID = other.UserID
+	}
+	if other.MotherVerified != p.MotherVerified {
+		p.MotherVerified = other.MotherVerified
+	}
+	if other.FatherVerified != p.FatherVerified {
+		p.FatherVerified = other.FatherVerified
+	}
+	if other.SpecifiedMotherID != p.SpecifiedMotherID {
+		if other.SpecifiedMotherID == 0 {
+			p.SpecifiedMotherID = 0
+			p.MotherID = nil
+		} else {
+			p.SpecifiedMotherID = other.SpecifiedMotherID
+			p.MotherVerified = false
+		}
+	}
+	if other.SpecifiedFatherID != p.SpecifiedFatherID {
+		if other.SpecifiedFatherID == 0 {
+			p.SpecifiedFatherID = 0
+			p.FatherID = nil
+		} else {
+			p.SpecifiedFatherID = other.SpecifiedFatherID
+			p.FatherVerified = false
+		}
+	}
+	if other.SpecifiedVeterinarianID != p.SpecifiedVeterinarianID {
+		if other.SpecifiedVeterinarianID == 0 {
+			p.SpecifiedVeterinarianID = 0
+			p.VeterinarianID = nil
+		} else {
+			p.SpecifiedVeterinarianID = other.SpecifiedVeterinarianID
+		}
+	}
+	if other.SpecifiedBreed != p.SpecifiedBreed {
+		if other.SpecifiedBreed == "" {
+			p.Breed = nil
+		}
+		p.SpecifiedBreed = other.SpecifiedBreed
+	}
+	if other.SpecifiedFamilyName != p.SpecifiedFamilyName {
+		if other.SpecifiedFamilyName == "" {
+			p.FamilyName = nil
+		}
+		p.SpecifiedFamilyName = other.SpecifiedFamilyName
 	}
 }
 

@@ -30,6 +30,9 @@ type RoleRepository interface {
 	DeleteByID(roleID int) (*models.Role, error)
 }
 
+type PetRepository interface {
+}
+
 type DumpRepository interface {
 	Make(savePath string) (*models.Dump, error)
 	InsertNewDumpFile(savePath string) (*models.Dump, error)

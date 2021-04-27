@@ -14,6 +14,7 @@ type DatabaseStore interface {
 	Close()
 	Users() repos.UserRepository
 	Roles() repos.RoleRepository
+	Pets() repos.PetRepository
 	Dumps() repos.DumpRepository
 }
 

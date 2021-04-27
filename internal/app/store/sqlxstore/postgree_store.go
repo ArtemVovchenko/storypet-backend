@@ -16,6 +16,7 @@ type PostgreDatabaseStore struct {
 
 	userRepository *UserRepository
 	roleRepository *RoleRepository
+	petRepository  *PetRepository
 	dumpRepository *DumpRepository
 }
 
@@ -72,6 +73,14 @@ func (s *PostgreDatabaseStore) Roles() repos.RoleRepository {
 		store: s,
 	}
 	return s.roleRepository
+}
+
+func (s *PostgreDatabaseStore) Pets() repos.PetRepository {
+	if s.petRepository != nil {
+		return s.petRepository
+	}
+	s.petRepository = &PetRepository{store: s}
+	return s.petRepository
 }
 
 func (s *PostgreDatabaseStore) Dumps() repos.DumpRepository {
