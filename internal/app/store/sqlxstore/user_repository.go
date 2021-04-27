@@ -281,7 +281,7 @@ func (r *UserRepository) CreateClinic(clinic *models.VetClinic) (*models.VetClin
 		INSERT INTO 
 			public.veterinarians_clinic (user_id, clinic_name, clinic_id) 
 		VALUES 
-			(:user_id, :clinic_name, clinic_id);`
+			(:user_id, :clinic_name, :clinic_id);`
 
 	transaction, err := r.store.db.Beginx()
 	if err != nil {

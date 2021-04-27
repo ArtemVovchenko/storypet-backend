@@ -36,3 +36,12 @@ func AnyRoleHavePermissions(roles []models.Role, permissions ...models.Permissio
 	}
 	return false
 }
+
+func AnyRoleIsVeterinarian(roles []models.Role) bool {
+	for _, role := range roles {
+		if role.IsVeterinarian() {
+			return true
+		}
+	}
+	return false
+}

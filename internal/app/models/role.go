@@ -80,6 +80,10 @@ func (r *Role) Update(other *Role) {
 	r.BeforeCreate()
 }
 
+func (r *Role) IsVeterinarian() bool {
+	return r.RoleID == 4
+}
+
 func (r Role) HasAllPermission(permissions ...Permission) bool {
 	for _, perm := range permissions {
 		if !reflect.ValueOf(r).FieldByName(perm.Name).Bool() {

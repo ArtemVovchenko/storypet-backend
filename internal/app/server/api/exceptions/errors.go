@@ -4,6 +4,7 @@ import "errors"
 
 var (
 	UnprocessableURIParam = errors.New("unprocessable uri parameter was providedF")
+	RecordAlreadyExist    = errors.New("can't create, record already exist")
 
 	DatabaseDumpFailed        = errors.New("could not create database dump")
 	DumpFileNotFoundInRequest = errors.New("no file field found in form/multipart section of request")
@@ -14,6 +15,7 @@ var (
 
 	RequestedUserNotFound = errors.New("no user with requested id")
 	IncorrectOldPassword  = errors.New("incorrect old password")
+	UserIsNotVeterinarian = errors.New("operation permitted, selected user is not veterinarian")
 
 	CanNotUpdatePrimaryRole = errors.New("could not update base system roles: administrator, subscribed/unsubscribed user and veterinarian")
 	CanNotDeletePrimaryRole = errors.New("could not delete base system roles: administrator, subscribed/unsubscribed user and veterinarian")

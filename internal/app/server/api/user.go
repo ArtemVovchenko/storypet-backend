@@ -50,60 +50,48 @@ func (a *UserAPI) ConfigureRoutes(router *mux.Router) {
 		Name("User Roles By ID").
 		Methods(http.MethodGet, http.MethodPost, http.MethodDelete).
 		HandlerFunc(a.ServeRoleRequest)
+
+	sb.Path("/{id:[0-9]+}/clinic").
+		Name("Veterinarian clinic By ID").
+		Methods(http.MethodGet, http.MethodPost, http.MethodPut, http.MethodDelete).
+		HandlerFunc(a.ServeClinicRequest)
 }
 
 func (a *UserAPI) ServeRegistrationRequest(w http.ResponseWriter, r *http.Request) {
 	switch r.Method {
 	case http.MethodPost:
 		requestUUID := r.Context().Value(middleware.CtxReqestUUID).(string)
-
-		switch r.Method {
-
-		case http.MethodGet:
-			if r.Context().Value(middleware.CtxAccessUUID) == nil {
-				a.server.RespondError(w, r, http.StatusUnauthorized, nil)
-				return
-			}
-			userModels, err := a.server.DatabaseStore().Users().SelectAll()
-			if err != nil {
-				a.server.Logger().Printf("Request ID: %s database error: %v", requestUUID, err)
-				a.server.RespondError(w, r, http.StatusInternalServerError, nil)
-				return
-			}
-			a.server.Respond(w, r, http.StatusOK, userModels)
-
-		case http.MethodPost:
-			type requestBody struct {
-				AccountEmail string  `json:"account_email"`
-				Password     string  `json:"password"`
-				Username     string  `json:"username"`
-				FullName     string  `json:"full_name"`
-				BackupEmail  *string `json:"backup_email"`
-				Location     *string `json:"location"`
-			}
-
-			rb := &requestBody{}
-			if err := json.NewDecoder(r.Body).Decode(rb); err != nil {
-				a.server.RespondError(w, r, http.StatusBadRequest, err)
-				return
-			}
-
-			u := &models.User{
-				AccountEmail: rb.AccountEmail,
-				Password:     rb.Password,
-				Username:     rb.Username,
-				FullName:     rb.FullName,
-			}
-			u.SetBackupEmail(rb.BackupEmail)
-			u.SetLocation(rb.Location)
-
-			if _, err := a.server.DatabaseStore().Users().Create(u); err != nil {
-				a.server.RespondError(w, r, http.StatusUnprocessableEntity, err)
-				return
-			}
-			u.Sanitise()
-			a.server.Respond(w, r, http.StatusCreated, u)
+		type requestBody struct {
+			AccountEmail string  `json:"account_email"`
+			Password     string  `json:"password"`
+			Username     string  `json:"username"`
+			FullName     string  `json:"full_name"`
+			BackupEmail  *string `json:"backup_email"`
+			Location     *string `json:"location"`
 		}
+
+		rb := &requestBody{}
+		if err := json.NewDecoder(r.Body).Decode(rb); err != nil {
+			a.server.RespondError(w, r, http.StatusBadRequest, err)
+			return
+		}
+
+		u := &models.User{
+			AccountEmail: rb.AccountEmail,
+			Password:     rb.Password,
+			Username:     rb.Username,
+			FullName:     rb.FullName,
+		}
+		u.SetBackupEmail(rb.BackupEmail)
+		u.SetLocation(rb.Location)
+
+		if _, err := a.server.DatabaseStore().Users().Create(u); err != nil {
+			a.server.Logger().Printf("Database err: %v, Request ID: %s", requestUUID)
+			a.server.RespondError(w, r, http.StatusUnprocessableEntity, err)
+			return
+		}
+		u.Sanitise()
+		a.server.Respond(w, r, http.StatusCreated, u)
 	}
 }
 
@@ -362,5 +350,126 @@ func (a *UserAPI) ServePasswordChangeRequest(w http.ResponseWriter, r *http.Requ
 			return
 		}
 		a.server.Respond(w, r, http.StatusOK, nil)
+	}
+}
+
+func (a *UserAPI) ServeClinicRequest(w http.ResponseWriter, r *http.Request) {
+	requestID, session, err := a.server.GetAuthorizedRequestInfo(r)
+	if err != nil {
+		a.server.RespondError(w, r, http.StatusInternalServerError, nil)
+		return
+	}
+
+	rawUserID, err := strconv.ParseInt(mux.Vars(r)["id"], 10, 64)
+	if err != nil {
+		a.server.RespondError(w, r, http.StatusBadRequest, exceptions.UnprocessableURIParam)
+		return
+	}
+	requestedUserID := int(rawUserID)
+
+	switch r.Method {
+	case http.MethodGet:
+		vetClinic, err := a.server.DatabaseStore().Users().SelectClinicByUserID(requestedUserID)
+		if err != nil {
+			if errors.Is(err, sql.ErrNoRows) {
+				a.server.RespondError(w, r, http.StatusNotFound, nil)
+				return
+			}
+			a.server.Logger().Printf("Database err: %v, Request ID: %s", requestID)
+			a.server.RespondError(w, r, http.StatusInternalServerError, nil)
+			return
+		}
+		a.server.Respond(w, r, http.StatusOK, vetClinic)
+
+	case http.MethodPost:
+		type requestBody struct {
+			ClinicId   string `json:"clinic_id"`
+			ClinicName string `json:"clinic_name"`
+		}
+		if !permissions.AnyRoleHavePermissions(session.Roles, permissions.Permissions().VeterinariansPermission) {
+			a.server.RespondError(w, r, http.StatusForbidden, nil)
+			return
+		}
+		requestedUserRoles, err := a.server.DatabaseStore().Roles().SelectUserRoles(requestedUserID)
+		if err != nil {
+			if errors.Is(err, sql.ErrNoRows) {
+				a.server.RespondError(w, r, http.StatusNotFound, nil)
+				return
+			}
+			a.server.Logger().Printf("Database err: %v, Request ID: %s", requestID)
+			a.server.RespondError(w, r, http.StatusInternalServerError, nil)
+			return
+		}
+		if !permissions.AnyRoleIsVeterinarian(requestedUserRoles) {
+			a.server.RespondError(w, r, http.StatusBadRequest, exceptions.UserIsNotVeterinarian)
+			return
+		}
+		if _, err := a.server.DatabaseStore().Users().SelectClinicByUserID(requestedUserID); !errors.Is(err, sql.ErrNoRows) {
+			a.server.RespondError(w, r, http.StatusBadRequest, exceptions.RecordAlreadyExist)
+			return
+		}
+		rb := &requestBody{}
+		if err := json.NewDecoder(r.Body).Decode(rb); err != nil {
+			a.server.RespondError(w, r, http.StatusBadRequest, err)
+			return
+		}
+		newVetModel := &models.VetClinic{
+			UserID:     requestedUserID,
+			ClinicID:   rb.ClinicId,
+			ClinicName: rb.ClinicName,
+		}
+		if _, err := a.server.DatabaseStore().Users().CreateClinic(newVetModel); err != nil {
+			a.server.Logger().Printf("Database err: %v, Request ID: %s", requestID)
+			a.server.RespondError(w, r, http.StatusInternalServerError, nil)
+			return
+		}
+		a.server.Respond(w, r, http.StatusCreated, nil)
+
+	case http.MethodPut:
+		type requestBody struct {
+			ClinicId   string `json:"clinic_id"`
+			ClinicName string `json:"clinic_name"`
+		}
+		if !permissions.AnyRoleHavePermissions(session.Roles, permissions.Permissions().VeterinariansPermission) {
+			a.server.RespondError(w, r, http.StatusForbidden, nil)
+			return
+		}
+		rb := &requestBody{}
+		if err := json.NewDecoder(r.Body).Decode(rb); err != nil {
+			a.server.RespondError(w, r, http.StatusBadRequest, err)
+			return
+		}
+		newVetModel := &models.VetClinic{
+			UserID:     requestedUserID,
+			ClinicID:   rb.ClinicId,
+			ClinicName: rb.ClinicName,
+		}
+		newVetModel, err = a.server.DatabaseStore().Users().UpdateClinic(newVetModel)
+		if err != nil {
+			if errors.Is(err, sql.ErrNoRows) {
+				a.server.RespondError(w, r, http.StatusNotFound, nil)
+				return
+			}
+			a.server.Logger().Printf("Database err: %v, Request ID: %s", requestID)
+			a.server.RespondError(w, r, http.StatusInternalServerError, nil)
+			return
+		}
+		a.server.Respond(w, r, http.StatusOK, newVetModel)
+
+	case http.MethodDelete:
+		if !permissions.AnyRoleHavePermissions(session.Roles, permissions.Permissions().VeterinariansPermission) {
+			a.server.RespondError(w, r, http.StatusForbidden, nil)
+			return
+		}
+		if _, err := a.server.DatabaseStore().Users().DeleteClinic(requestedUserID); err != nil {
+			if errors.Is(err, sql.ErrNoRows) {
+				a.server.RespondError(w, r, http.StatusNotFound, nil)
+				return
+			}
+			a.server.Logger().Printf("Database err: %v, Request ID: %s", requestID)
+			a.server.RespondError(w, r, http.StatusInternalServerError, nil)
+			return
+		}
+		a.server.RespondError(w, r, http.StatusNoContent, nil)
 	}
 }
