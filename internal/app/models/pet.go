@@ -21,10 +21,20 @@ func (p *PetType) Validate() error {
 	)
 }
 
+func (p *PetType) Update(other *PetType) {
+	if other.RERCoefficient != 0 && other.RERCoefficient != p.RERCoefficient {
+		p.RERCoefficient = other.RERCoefficient
+	}
+	if other.TypeName != "" && other.TypeName != p.TypeName {
+		p.TypeName = other.TypeName
+	}
+}
+
 type Pet struct {
 	PetID          int             `json:"pet_id" db:"pet_id"`
 	Name           string          `json:"name" db:"name"`
 	UserID         int             `json:"user_id" db:"user_id"`
+	PetType        int             `json:"pet_type" db:"pet_type"`
 	MotherVerified bool            `json:"mother_verified" db:"mother_verified"`
 	FatherVerified bool            `json:"father_verified" db:"father_verified"`
 	MotherID       *sql.NullInt64  `json:"-" db:"mother_id"`
@@ -99,6 +109,9 @@ func (p *Pet) AfterCreate() {
 
 func (p *Pet) Update(other *Pet) {
 	// TODO: Model provides a part of business logic (verification of parents). Fix it after LB
+	if other.PetType != 0 && p.PetType != other.PetType {
+		p.PetType = other.PetType
+	}
 	if other.Name != "" && p.Name != other.Name {
 		p.Name = other.Name
 	}
@@ -148,6 +161,36 @@ func (p *Pet) Update(other *Pet) {
 			p.FamilyName = nil
 		}
 		p.SpecifiedFamilyName = other.SpecifiedFamilyName
+	}
+}
+
+func (p *Pet) SetSpecifiedMotherID(id *int) {
+	if id != nil {
+		p.SpecifiedMotherID = *id
+	}
+}
+
+func (p *Pet) SetSpecifiedFatherID(id *int) {
+	if id != nil {
+		p.SpecifiedFatherID = *id
+	}
+}
+
+func (p *Pet) SetSpecifiedVeterinarianID(id *int) {
+	if id != nil {
+		p.SpecifiedVeterinarianID = *id
+	}
+}
+
+func (p *Pet) SetSpecifiedBreed(breed *string) {
+	if breed != nil {
+		p.SpecifiedBreed = *breed
+	}
+}
+
+func (p *Pet) SetSpecifiedFamilyName(name *string) {
+	if name != nil {
+		p.SpecifiedBreed = *name
 	}
 }
 

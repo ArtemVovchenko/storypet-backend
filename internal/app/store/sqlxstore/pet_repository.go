@@ -6,6 +6,15 @@ type PetRepository struct {
 	store *PostgreDatabaseStore
 }
 
+func (r *PetRepository) SelectAll() ([]models.Pet, error) {
+	var petModels []models.Pet
+	if err := r.store.db.Select(&petModels, `SELECT * FROM public.pets;`); err != nil {
+		r.store.logger.Println(err)
+		return nil, err
+	}
+	return petModels, nil
+}
+
 func (r *PetRepository) FindByNameAndOwner(name string, ownerID int) (*models.Pet, error) {
 	selectQuery := `SELECT * FROM public.pets WHERE name = $1 AND user_id = $2;`
 	petModel := &models.Pet{}
@@ -29,9 +38,9 @@ func (r *PetRepository) FindByID(petID int) (*models.Pet, error) {
 func (r *PetRepository) CreatePet(pet *models.Pet) (*models.Pet, error) {
 	createQuery := `
 		INSERT INTO 
-			public.pets (name, user_id, veterinar_id, pet_type, breed, family_name) 
+			public.pets (name, user_id, veterinar_id, pet_type, breed, family_name, mother_id, father_id) 
 		VALUES 
-			(:name, :user_id, :veterinar_id, :pet_type, :breed, :family_name)`
+			(:name, :user_id, :veterinar_id, :pet_type, :breed, :family_name, :mother_id, :father_id);`
 	transaction, err := r.store.db.Beginx()
 	if err != nil {
 		r.store.logger.Println(err)
@@ -58,6 +67,7 @@ func (r *PetRepository) UpdatePet(pet *models.Pet) (*models.Pet, error) {
 		UPDATE public.pets
 		SET 
 			name = :name,
+		    pet_type = :pet_type,
 			user_id = :user_id,
 			veterinar_id = :veterinar_id,
 			breed = :breed,
@@ -120,4 +130,119 @@ func (r *PetRepository) DeleteByID(petID int) (*models.Pet, error) {
 		return nil, err
 	}
 	return deletingPet, nil
+}
+
+func (r *PetRepository) SelectAllTypes() ([]models.PetType, error) {
+	selectQuery := `SELECT * FROM public.pet_types;`
+	var petTypes []models.PetType
+	if err := r.store.db.Select(&petTypes, selectQuery); err != nil {
+		r.store.logger.Println(err)
+		return nil, err
+	}
+	return petTypes, nil
+}
+
+func (r *PetRepository) SelectTypeByName(typeName string) (*models.PetType, error) {
+	selectQuery := `SELECT * FROM public.pet_types WHERE type_name = $1;`
+	petType := &models.PetType{}
+	if err := r.store.db.Get(petType, selectQuery, typeName); err != nil {
+		r.store.logger.Println(err)
+		return nil, err
+	}
+	return petType, nil
+}
+
+func (r *PetRepository) SelectTypeByID(typeID int) (*models.PetType, error) {
+	selectQuery := `SELECT * FROM public.pet_types WHERE type_id = $1;`
+	petType := &models.PetType{}
+	if err := r.store.db.Get(petType, selectQuery, typeID); err != nil {
+		r.store.logger.Println(err)
+		return nil, err
+	}
+	return petType, nil
+}
+
+func (r *PetRepository) CreatePetType(petType *models.PetType) (*models.PetType, error) {
+	insertQuery := `
+		INSERT INTO public.pet_types 
+			(type_name, rer_coefficient) 
+		VALUES 
+			(:type_name, :rer_coefficient)`
+	transaction, err := r.store.db.Beginx()
+	if err != nil {
+		r.store.logger.Println(err)
+		return nil, err
+	}
+	defer func() {
+		_ = transaction.Rollback()
+	}()
+
+	if _, err := transaction.Exec(insertQuery, petType); err != nil {
+		r.store.logger.Println(err)
+		return nil, err
+	}
+
+	if err := transaction.Commit(); err != nil {
+		return nil, err
+	}
+
+	return r.SelectTypeByName(petType.TypeName)
+}
+
+func (r *PetRepository) UpdatePetType(other *models.PetType) (*models.PetType, error) {
+	updateQuery := `
+		UPDATE public.pet_types
+		SET 
+			type_name = :type_name,
+			rer_coefficient = :rer_coefficient
+		WHERE type_id = :type_id`
+
+	transaction, err := r.store.db.Beginx()
+	if err != nil {
+		r.store.logger.Println(err)
+		return nil, err
+	}
+	defer func() {
+		_ = transaction.Rollback()
+	}()
+
+	if _, err := transaction.NamedExec(updateQuery, other); err != nil {
+		r.store.logger.Println(err)
+		return nil, err
+	}
+
+	if err := transaction.Commit(); err != nil {
+		r.store.logger.Println(err)
+		return nil, err
+	}
+
+	return r.SelectTypeByID(other.TypeID)
+}
+
+func (r *PetRepository) DeleteTypeByID(typeID int) (*models.PetType, error) {
+	deleteQuery := `DELETE FROM public.pet_types WHERE type_id = $1;`
+	deletingType, err := r.SelectTypeByID(typeID)
+	if err != nil {
+		return nil, err
+	}
+
+	transaction, err := r.store.db.Beginx()
+	if err != nil {
+		r.store.logger.Println(err)
+		return nil, err
+	}
+	defer func() {
+		_ = transaction.Rollback()
+	}()
+
+	if _, err := transaction.Exec(deleteQuery, typeID); err != nil {
+		r.store.logger.Println(err)
+		return nil, err
+	}
+
+	if err := transaction.Commit(); err != nil {
+		r.store.logger.Println(err)
+		return nil, err
+	}
+	return deletingType, nil
 }

@@ -31,6 +31,19 @@ type RoleRepository interface {
 }
 
 type PetRepository interface {
+	SelectAll() ([]models.Pet, error)
+	FindByNameAndOwner(name string, ownerID int) (*models.Pet, error)
+	FindByID(petID int) (*models.Pet, error)
+	CreatePet(pet *models.Pet) (*models.Pet, error)
+	UpdatePet(pet *models.Pet) (*models.Pet, error)
+	DeleteByID(petID int) (*models.Pet, error)
+
+	SelectAllTypes() ([]models.PetType, error)
+	SelectTypeByID(typeID int) (*models.PetType, error)
+	SelectTypeByName(typeName string) (*models.PetType, error)
+	CreatePetType(petType *models.PetType) (*models.PetType, error)
+	UpdatePetType(other *models.PetType) (*models.PetType, error)
+	DeleteTypeByID(typeID int) (*models.PetType, error)
 }
 
 type DumpRepository interface {
