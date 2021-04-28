@@ -185,6 +185,112 @@ func (r *PetRepository) DeleteVeterinarian(petID int) error {
 	return nil
 }
 
+func (r *PetRepository) SpecifyParents(fatherID *int, motherID *int, petID int) error {
+	spMother := `UPDATE public.pets SET mother_id = $1, mother_verified = FALSE WHERE pet_id = $2;`
+	spFather := `UPDATE public.pets SET father_id = $1, father_verified = FALSE WHERE pet_id = $2;`
+	transaction, err := r.store.db.Beginx()
+	if err != nil {
+		r.store.logger.Println(err)
+		return err
+	}
+	defer func() {
+		_ = transaction.Rollback()
+	}()
+
+	if motherID != nil {
+		if _, err := transaction.Exec(spMother, *motherID, petID); err != nil {
+			r.store.logger.Println(err)
+			return err
+		}
+	}
+
+	if fatherID != nil {
+		if _, err := transaction.Exec(spFather, *fatherID, petID); err != nil {
+			r.store.logger.Println(err)
+			return err
+		}
+	}
+
+	if err := transaction.Commit(); err != nil {
+		r.store.logger.Println(err)
+		return err
+	}
+	return nil
+}
+
+func (r *PetRepository) RemoveParents(petID int) error {
+	query := `
+		UPDATE public.pets 
+		SET 
+			father_id = NULL, 
+			father_verified = FALSE,
+			mother_id = NULL,
+			mother_verified = FALSE
+		WHERE pet_id = $1;`
+	transaction, err := r.store.db.Beginx()
+	if err != nil {
+		r.store.logger.Println(err)
+		return err
+	}
+	defer func() {
+		_ = transaction.Rollback()
+	}()
+
+	if _, err := transaction.Exec(query, petID); err != nil {
+		r.store.logger.Println(err)
+		return err
+	}
+	if err := transaction.Commit(); err != nil {
+		r.store.logger.Println(err)
+		return err
+	}
+	return nil
+}
+
+func (r *PetRepository) VerifyMother(petID int) error {
+	query := `UPDATE public.pets SET mother_verified = TRUE WHERE pet_id = $1;`
+	transaction, err := r.store.db.Beginx()
+	if err != nil {
+		r.store.logger.Println(err)
+		return err
+	}
+	defer func() {
+		_ = transaction.Rollback()
+	}()
+
+	if _, err := transaction.Exec(query, petID); err != nil {
+		r.store.logger.Println(err)
+		return err
+	}
+	if err := transaction.Commit(); err != nil {
+		r.store.logger.Println(err)
+		return err
+	}
+	return nil
+}
+
+func (r *PetRepository) VerifyFather(petID int) error {
+	query := `UPDATE public.pets SET father_verified = TRUE WHERE pet_id = $1;`
+	transaction, err := r.store.db.Beginx()
+	if err != nil {
+		r.store.logger.Println(err)
+		return err
+	}
+	defer func() {
+		_ = transaction.Rollback()
+	}()
+
+	if _, err := transaction.Exec(query, petID); err != nil {
+		r.store.logger.Println(err)
+		return err
+	}
+	if err := transaction.Commit(); err != nil {
+		r.store.logger.Println(err)
+		return err
+	}
+	return nil
+}
+
 func (r *PetRepository) SelectAllTypes() ([]models.PetType, error) {
 	selectQuery := `SELECT * FROM public.pet_types;`
 	var petTypes []models.PetType

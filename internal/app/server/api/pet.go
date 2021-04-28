@@ -44,16 +44,26 @@ func (a *PetsAPI) ConfigureRouter(router *mux.Router) {
 		Methods(http.MethodGet, http.MethodPut, http.MethodDelete).
 		HandlerFunc(a.ServeTypesIDRequest)
 
-	sb.Path("/{id:[0-9]+}/veterinarian}").
+	sb.Path("/{id:[0-9]+}/veterinarian").
 		Name("Pets veterinarian request").
 		Methods(http.MethodGet, http.MethodPost, http.MethodDelete).
 		HandlerFunc(a.ServeVeterinarianRequest)
 
-	sb.Path("/{id:[0-9]+}/parents}").Methods(http.MethodGet, http.MethodPost, http.MethodPut, http.MethodDelete)
-	sb.Path("/{id:[0-9]+}/parents/verify}").Methods(http.MethodPost)
+	sb.Path("/{id:[0-9]+}/parents").
+		Name("Pets parents Request").
+		Methods(http.MethodGet, http.MethodPost, http.MethodDelete).
+		HandlerFunc(a.ServeParentsRequest)
+
+	sb.Path("/{id:[0-9]+}/parents/verify/{parent:father|mother}").
+		Name("Pets parent verification request").
+		Methods(http.MethodPost).
+		HandlerFunc(a.ServeParentsVerificationRequest)
 }
 
 func (a *PetsAPI) ServeRootRequest(w http.ResponseWriter, r *http.Request) {
+	if r.Method == http.MethodOptions {
+		return
+	}
 	requestID, session, err := a.server.GetAuthorizedRequestInfo(r)
 	if err != nil {
 		a.server.RespondError(w, r, http.StatusInternalServerError, nil)
@@ -116,6 +126,9 @@ func (a *PetsAPI) ServeRootRequest(w http.ResponseWriter, r *http.Request) {
 }
 
 func (a *PetsAPI) ServeIDRequest(w http.ResponseWriter, r *http.Request) {
+	if r.Method == http.MethodOptions {
+		return
+	}
 	requestID, session, err := a.server.GetAuthorizedRequestInfo(r)
 	if err != nil {
 		a.server.RespondError(w, r, http.StatusInternalServerError, nil)
@@ -236,6 +249,9 @@ func (a *PetsAPI) ServeIDRequest(w http.ResponseWriter, r *http.Request) {
 }
 
 func (a *PetsAPI) ServeTypesRootRequest(w http.ResponseWriter, r *http.Request) {
+	if r.Method == http.MethodOptions {
+		return
+	}
 	requestID, session, err := a.server.GetAuthorizedRequestInfo(r)
 	if err != nil {
 		a.server.RespondError(w, r, http.StatusInternalServerError, nil)
@@ -285,6 +301,9 @@ func (a *PetsAPI) ServeTypesRootRequest(w http.ResponseWriter, r *http.Request) 
 }
 
 func (a *PetsAPI) ServeTypesIDRequest(w http.ResponseWriter, r *http.Request) {
+	if r.Method == http.MethodOptions {
+		return
+	}
 	requestID, session, err := a.server.GetAuthorizedRequestInfo(r)
 	if err != nil {
 		a.server.RespondError(w, r, http.StatusInternalServerError, nil)
@@ -364,6 +383,9 @@ func (a *PetsAPI) ServeTypesIDRequest(w http.ResponseWriter, r *http.Request) {
 }
 
 func (a *PetsAPI) ServeVeterinarianRequest(w http.ResponseWriter, r *http.Request) {
+	if r.Method == http.MethodOptions {
+		return
+	}
 	requestID, session, err := a.server.GetAuthorizedRequestInfo(r)
 	if err != nil {
 		a.server.RespondError(w, r, http.StatusInternalServerError, nil)
@@ -427,7 +449,7 @@ func (a *PetsAPI) ServeVeterinarianRequest(w http.ResponseWriter, r *http.Reques
 			}
 		}
 		if petModel.VeterinarianID != nil && petModel.VeterinarianID.Valid {
-			a.server.RespondError(w, r, http.StatusNotFound, exceptions.PetHasVeterinarian)
+			a.server.RespondError(w, r, http.StatusUnprocessableEntity, exceptions.PetHasVeterinarian)
 			return
 		}
 		if err := a.server.DatabaseStore().Pets().AssignVeterinarian(requestedID, rb.VeterinarianID); err != nil {
@@ -449,6 +471,192 @@ func (a *PetsAPI) ServeVeterinarianRequest(w http.ResponseWriter, r *http.Reques
 			}
 		}
 		if err := a.server.DatabaseStore().Pets().DeleteVeterinarian(petModel.PetID); err != nil {
+			a.server.Logger().Printf("Database error: %v Request ID: %v", err, requestID)
+			a.server.RespondError(w, r, http.StatusInternalServerError, nil)
+			return
+		}
+		a.server.Respond(w, r, http.StatusOK, nil)
+	}
+}
+
+func (a *PetsAPI) ServeParentsRequest(w http.ResponseWriter, r *http.Request) {
+	if r.Method == http.MethodOptions {
+		return
+	}
+	requestID, session, err := a.server.GetAuthorizedRequestInfo(r)
+	if err != nil {
+		a.server.RespondError(w, r, http.StatusInternalServerError, nil)
+		return
+	}
+	rawID, err := strconv.ParseInt(mux.Vars(r)["id"], 10, 64)
+	if err != nil {
+		a.server.RespondError(w, r, http.StatusBadRequest, exceptions.UnprocessableURIParam)
+		return
+	}
+	requestedID := int(rawID)
+
+	petModel, err := a.server.DatabaseStore().Pets().FindByID(requestedID)
+	if err != nil {
+		if errors.Is(err, sql.ErrNoRows) {
+			a.server.RespondError(w, r, http.StatusNotFound, nil)
+			return
+		}
+		a.server.Logger().Printf("Database err: %v, Request ID: %v", err, requestID)
+		a.server.RespondError(w, r, http.StatusInternalServerError, nil)
+		return
+	}
+
+	switch r.Method {
+	case http.MethodGet:
+		type responseBody struct {
+			Father *models.Pet `json:"father"`
+			Mother *models.Pet `json:"mother"`
+		}
+
+		var father, mother *models.Pet
+		if petModel.FatherID != nil && petModel.FatherID.Valid {
+			if father, err = a.server.DatabaseStore().Pets().FindByID(int(petModel.FatherID.Int64)); err != nil {
+				a.server.Logger().Printf("Database error: %v Request ID %v", err, requestID)
+				a.server.RespondError(w, r, http.StatusInternalServerError, nil)
+				return
+			}
+		}
+		if petModel.MotherID != nil && petModel.MotherID.Valid {
+			if mother, err = a.server.DatabaseStore().Pets().FindByID(int(petModel.MotherID.Int64)); err != nil {
+				a.server.Logger().Printf("Database error: %v Request ID %v", err, requestID)
+				a.server.RespondError(w, r, http.StatusInternalServerError, nil)
+				return
+			}
+		}
+		rb := &responseBody{Father: father, Mother: mother}
+		a.server.Respond(w, r, http.StatusOK, rb)
+
+	case http.MethodPost:
+		type requestBody struct {
+			FatherID *int `json:"father_id"`
+			MotherID *int `json:"mother_id"`
+		}
+		if petModel.UserID != session.UserID {
+			if !permissions.AnyRoleHavePermissions(session.Roles, permissions.Permissions().UsersPermission, permissions.Permissions().PetsPermission) {
+				a.server.RespondError(w, r, http.StatusForbidden, nil)
+				return
+			}
+		}
+		rb := &requestBody{}
+		if err := json.NewDecoder(r.Body).Decode(rb); err != nil {
+			a.server.RespondError(w, r, http.StatusBadRequest, err)
+			return
+		}
+		if rb.FatherID == nil && rb.MotherID == nil {
+			a.server.RespondError(w, r, http.StatusUnprocessableEntity, exceptions.NoParentsSpecified)
+			return
+		}
+		if err := a.server.DatabaseStore().Pets().SpecifyParents(rb.FatherID, rb.MotherID, petModel.PetID); err != nil {
+			a.server.Logger().Printf("Database error: %v Request ID: $v", err, requestID)
+			a.server.RespondError(w, r, http.StatusInternalServerError, nil)
+			return
+		}
+		a.server.Respond(w, r, http.StatusOK, nil)
+
+	case http.MethodDelete:
+		if petModel.UserID != session.UserID {
+			if !permissions.AnyRoleHavePermissions(session.Roles, permissions.Permissions().UsersPermission, permissions.Permissions().PetsPermission) {
+				a.server.RespondError(w, r, http.StatusForbidden, nil)
+				return
+			}
+		}
+		if err := a.server.DatabaseStore().Pets().RemoveParents(petModel.PetID); err != nil {
+			a.server.Logger().Printf("Database error: %v Request ID: $v", err, requestID)
+			a.server.RespondError(w, r, http.StatusInternalServerError, nil)
+			return
+		}
+		a.server.Respond(w, r, http.StatusOK, nil)
+	}
+}
+
+func (a *PetsAPI) ServeParentsVerificationRequest(w http.ResponseWriter, r *http.Request) {
+	if r.Method == http.MethodOptions {
+		return
+	}
+	requestID, session, err := a.server.GetAuthorizedRequestInfo(r)
+	if err != nil {
+		a.server.RespondError(w, r, http.StatusInternalServerError, nil)
+		return
+	}
+	rawID, err := strconv.ParseInt(mux.Vars(r)["id"], 10, 64)
+	if err != nil {
+		a.server.RespondError(w, r, http.StatusBadRequest, exceptions.UnprocessableURIParam)
+		return
+	}
+	requestedID := int(rawID)
+	parent := mux.Vars(r)["parent"]
+
+	petModel, err := a.server.DatabaseStore().Pets().FindByID(requestedID)
+	if err != nil {
+		if errors.Is(err, sql.ErrNoRows) {
+			a.server.RespondError(w, r, http.StatusNotFound, nil)
+			return
+		}
+		a.server.Logger().Printf("Database err: %v, Request ID: %v", err, requestID)
+		a.server.RespondError(w, r, http.StatusInternalServerError, nil)
+		return
+	}
+
+	switch parent {
+	case "father":
+		if petModel.FatherID == nil || !petModel.FatherID.Valid {
+			a.server.RespondError(w, r, http.StatusBadRequest, exceptions.NoParentsSpecified)
+			return
+		}
+		fatherPet, err := a.server.DatabaseStore().Pets().FindByID(int(petModel.FatherID.Int64))
+		if err != nil {
+			a.server.Logger().Printf("Database error: %v Request ID: %v", err, requestID)
+			a.server.RespondError(w, r, http.StatusInternalServerError, nil)
+			return
+		}
+		owner, err := a.server.DatabaseStore().Users().FindByID(fatherPet.UserID)
+		if err != nil {
+			a.server.Logger().Printf("Database error: %v Request ID: %v", err, requestID)
+			a.server.RespondError(w, r, http.StatusInternalServerError, nil)
+			return
+		}
+		if session.UserID != owner.UserID {
+			if !permissions.AnyRoleHavePermissions(session.Roles, permissions.Permissions().UsersPermission, permissions.Permissions().PetsPermission) {
+				a.server.RespondError(w, r, http.StatusForbidden, nil)
+				return
+			}
+		}
+		if err := a.server.DatabaseStore().Pets().VerifyFather(petModel.PetID); err != nil {
+			a.server.Logger().Printf("Database error: %v Request ID: %v", err, requestID)
+			a.server.RespondError(w, r, http.StatusInternalServerError, nil)
+			return
+		}
+		a.server.Respond(w, r, http.StatusOK, nil)
+
+	case "mother":
+		if petModel.MotherID == nil || !petModel.MotherID.Valid {
+			a.server.RespondError(w, r, http.StatusBadRequest, exceptions.NoParentsSpecified)
+			return
+		}
+		fatherPet, err := a.server.DatabaseStore().Pets().FindByID(int(petModel.MotherID.Int64))
+		if err != nil {
+			a.server.Logger().Printf("Database error: %v Request ID: %v", err, requestID)
+			a.server.RespondError(w, r, http.StatusInternalServerError, nil)
+			return
+		}
+		owner, err := a.server.DatabaseStore().Users().FindByID(fatherPet.UserID)
+		if err != nil {
+			a.server.Logger().Printf("Database error: %v Request ID: %v", err, requestID)
+			a.server.RespondError(w, r, http.StatusInternalServerError, nil)
+			return
+		}
+		if session.UserID != owner.UserID {
+			if !permissions.AnyRoleHavePermissions(session.Roles, permissions.Permissions().UsersPermission, permissions.Permissions().PetsPermission) {
+				a.server.RespondError(w, r, http.StatusForbidden, nil)
+				return
+			}
+		}
+		if err := a.server.DatabaseStore().Pets().VerifyMother(petModel.PetID); err != nil {
 			a.server.Logger().Printf("Database error: %v Request ID: %v", err, requestID)
 			a.server.RespondError(w, r, http.StatusInternalServerError, nil)
 			return

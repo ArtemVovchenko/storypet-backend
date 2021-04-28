@@ -39,6 +39,10 @@ type PetRepository interface {
 	DeleteByID(petID int) (*models.Pet, error)
 	AssignVeterinarian(petID int, veterinarianID int) error
 	DeleteVeterinarian(petID int) error
+	SpecifyParents(fatherID *int, motherID *int, petID int) error
+	RemoveParents(petID int) error
+	VerifyMother(petID int) error
+	VerifyFather(petID int) error
 
 	SelectAllTypes() ([]models.PetType, error)
 	SelectTypeByID(typeID int) (*models.PetType, error)
