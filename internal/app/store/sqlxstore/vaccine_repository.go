@@ -18,7 +18,7 @@ func (r *VaccineRepository) FindByID(vaccineID int) (*models.Vaccine, error) {
 }
 
 func (r *VaccineRepository) SelectByPetID(petID int) ([]models.Vaccine, error) {
-	query := `SELECT * FROM public.vaccines WHERE vaccine_id = $1;`
+	query := `SELECT * FROM public.vaccines WHERE pet_id = $1;`
 	var vaccines []models.Vaccine
 	if err := r.store.db.Select(&vaccines, query, petID); err != nil {
 		r.store.logger.Println(err)
@@ -35,10 +35,11 @@ func (r *VaccineRepository) Create(vaccine *models.Vaccine) (*models.Vaccine, er
 		INSERT INTO public.vaccines 
 			(pet_id, name, vaccination_date, description) 
 		VALUES
-			(:pet_id, :name, :vaccination_date, :description);`
+			($1, $2, $3, $4)
+		RETURNING vaccine_id;`
 	selectQuery := `
-		SELECT * FROM public.vaccines 
-		WHERE pet_id = :pet_id AND vaccination_date = :vaccination_date AND description = :description;`
+		SELECT * FROM public.vaccines
+		WHERE vaccine_id = $1;`
 
 	transaction, err := r.store.db.Beginx()
 	if err != nil {
@@ -48,8 +49,14 @@ func (r *VaccineRepository) Create(vaccine *models.Vaccine) (*models.Vaccine, er
 	defer func() {
 		_ = transaction.Rollback()
 	}()
-
-	if _, err := transaction.NamedExec(insertQuery, vaccine); err != nil {
+	var newVaccineID int
+	if err := transaction.QueryRowx(
+		insertQuery,
+		vaccine.PetID,
+		vaccine.Name,
+		vaccine.VaccinationDate,
+		vaccine.Description,
+	).Scan(&newVaccineID); err != nil {
 		r.store.logger.Println(err)
 		return nil, err
 	}
@@ -59,7 +66,7 @@ func (r *VaccineRepository) Create(vaccine *models.Vaccine) (*models.Vaccine, er
 		return nil, err
 	}
 	createdModel := &models.Vaccine{}
-	if err := r.store.db.Select(createdModel, selectQuery, vaccine); err != nil {
+	if err := r.store.db.Get(createdModel, selectQuery, newVaccineID); err != nil {
 		r.store.logger.Println(err)
 		return nil, err
 	}
@@ -115,6 +122,10 @@ func (r *VaccineRepository) DeleteByID(vaccineID int) (*models.Vaccine, error) {
 	}()
 
 	if _, err := transaction.Exec(deletingQuery, vaccineID); err != nil {
+		r.store.logger.Println(err)
+		return nil, err
+	}
+	if err := transaction.Commit(); err != nil {
 		r.store.logger.Println(err)
 		return nil, err
 	}

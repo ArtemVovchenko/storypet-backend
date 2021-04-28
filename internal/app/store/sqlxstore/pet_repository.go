@@ -1,6 +1,9 @@
 package sqlxstore
 
-import "github.com/ArtemVovchenko/storypet-backend/internal/app/models"
+import (
+	"database/sql"
+	"github.com/ArtemVovchenko/storypet-backend/internal/app/models"
+)
 
 type PetRepository struct {
 	store *PostgreDatabaseStore
@@ -404,4 +407,17 @@ func (r *PetRepository) DeleteTypeByID(typeID int) (*models.PetType, error) {
 		return nil, err
 	}
 	return deletingType, nil
+}
+
+func (r *PetRepository) IsUserPetsVeterinarian(userID int, petID int) (bool, error) {
+	query := `SELECT veterinarian_id FROM public.pets WHERE pet_id = $1;`
+	vetID := &sql.NullInt64{}
+	if err := r.store.db.Get(vetID, query, petID); err != nil {
+		r.store.logger.Println(err)
+		return false, err
+	}
+	if !vetID.Valid || userID != int(vetID.Int64) {
+		return false, nil
+	}
+	return true, nil
 }

@@ -50,6 +50,8 @@ type PetRepository interface {
 	CreatePetType(petType *models.PetType) (*models.PetType, error)
 	UpdatePetType(other *models.PetType) (*models.PetType, error)
 	DeleteTypeByID(typeID int) (*models.PetType, error)
+
+	IsUserPetsVeterinarian(userID int, petID int) (bool, error)
 }
 
 type VaccineRepository interface {

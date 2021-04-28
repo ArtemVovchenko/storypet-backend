@@ -15,6 +15,7 @@ type DatabaseStore interface {
 	Users() repos.UserRepository
 	Roles() repos.RoleRepository
 	Pets() repos.PetRepository
+	Vaccines() repos.VaccineRepository
 	Dumps() repos.DumpRepository
 }
 
