@@ -139,6 +139,52 @@ func (r *PetRepository) DeleteByID(petID int) (*models.Pet, error) {
 	return deletingPet, nil
 }
 
+func (r *PetRepository) AssignVeterinarian(petID int, veterinarianID int) error {
+	query := `UPDATE public.pets SET veterinarian_id = $1 WHERE pet_id = $2`
+	transaction, err := r.store.db.Beginx()
+	if err != nil {
+		r.store.logger.Println(err)
+		return err
+	}
+	defer func() {
+		_ = transaction.Rollback()
+	}()
+
+	if _, err := r.store.db.Exec(query, veterinarianID, petID); err != nil {
+		r.store.logger.Println(err)
+		return err
+	}
+
+	if err := transaction.Commit(); err != nil {
+		r.store.logger.Println(err)
+		return err
+	}
+	return nil
+}
+
+func (r *PetRepository) DeleteVeterinarian(petID int) error {
+	query := `UPDATE public.pets SET veterinarian_id = NULL WHERE pet_id = $1`
+	transaction, err := r.store.db.Beginx()
+	if err != nil {
+		r.store.logger.Println(err)
+		return err
+	}
+	defer func() {
+		_ = transaction.Rollback()
+	}()
+
+	if _, err := r.store.db.Exec(query, petID); err != nil {
+		r.store.logger.Println(err)
+		return err
+	}
+
+	if err := transaction.Commit(); err != nil {
+		r.store.logger.Println(err)
+		return err
+	}
+	return nil
+}
+
 func (r *PetRepository) SelectAllTypes() ([]models.PetType, error) {
 	selectQuery := `SELECT * FROM public.pet_types;`
 	var petTypes []models.PetType

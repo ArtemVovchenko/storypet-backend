@@ -21,4 +21,6 @@ var (
 	CanNotDeletePrimaryRole = errors.New("could not delete base system roles: administrator, subscribed/unsubscribed user and veterinarian")
 
 	CanNotAssignPetToAnotherUser = errors.New("assigning new pet to other user is permitted")
+	PetHasVeterinarian           = errors.New("can not assign veterinarian to pet, pet currently has a veterinarian")
+	PetHasNoVeterinarian         = errors.New("pet has not a veterinarian")
 )

@@ -37,6 +37,8 @@ type PetRepository interface {
 	CreatePet(pet *models.Pet) (*models.Pet, error)
 	UpdatePet(pet *models.Pet) (*models.Pet, error)
 	DeleteByID(petID int) (*models.Pet, error)
+	AssignVeterinarian(petID int, veterinarianID int) error
+	DeleteVeterinarian(petID int) error
 
 	SelectAllTypes() ([]models.PetType, error)
 	SelectTypeByID(typeID int) (*models.PetType, error)

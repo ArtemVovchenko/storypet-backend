@@ -43,6 +43,14 @@ func (a *PetsAPI) ConfigureRouter(router *mux.Router) {
 		Name("Pets types ID Request").
 		Methods(http.MethodGet, http.MethodPut, http.MethodDelete).
 		HandlerFunc(a.ServeTypesIDRequest)
+
+	sb.Path("/{id:[0-9]+}/veterinarian}").
+		Name("Pets veterinarian request").
+		Methods(http.MethodGet, http.MethodPost, http.MethodDelete).
+		HandlerFunc(a.ServeVeterinarianRequest)
+
+	sb.Path("/{id:[0-9]+}/parents}").Methods(http.MethodGet, http.MethodPost, http.MethodPut, http.MethodDelete)
+	sb.Path("/{id:[0-9]+}/parents/verify}").Methods(http.MethodPost)
 }
 
 func (a *PetsAPI) ServeRootRequest(w http.ResponseWriter, r *http.Request) {
@@ -64,14 +72,11 @@ func (a *PetsAPI) ServeRootRequest(w http.ResponseWriter, r *http.Request) {
 
 	case http.MethodPost:
 		type requestBody struct {
-			Name           string  `json:"name"`
-			PetType        int     `json:"pet_type"`
-			VeterinarianID *int    `json:"veterinarian_id"`
-			MotherID       *int    `json:"mother_id"`
-			FatherID       *int    `json:"father_id"`
-			Breed          *string `json:"breed"`
-			FamilyName     *string `json:"family_name"`
-			UserID         *int    `json:"user_id"`
+			Name       string  `json:"name"`
+			PetType    int     `json:"pet_type"`
+			Breed      *string `json:"breed"`
+			FamilyName *string `json:"family_name"`
+			UserID     *int    `json:"user_id"`
 		}
 		rb := &requestBody{}
 		if err := json.NewDecoder(r.Body).Decode(rb); err != nil {
@@ -91,24 +96,9 @@ func (a *PetsAPI) ServeRootRequest(w http.ResponseWriter, r *http.Request) {
 			petOwner = *rb.UserID
 		}
 
-		if rb.VeterinarianID != nil {
-			specifiedVetRoles, err := a.server.DatabaseStore().Roles().SelectUserRoles(*rb.VeterinarianID)
-			if err != nil {
-				a.server.Respond(w, r, http.StatusUnprocessableEntity, exceptions.UserIsNotVeterinarian)
-				return
-			}
-			if !permissions.AnyRoleIsVeterinarian(specifiedVetRoles) {
-				a.server.Respond(w, r, http.StatusUnprocessableEntity, exceptions.UserIsNotVeterinarian)
-				return
-			}
-		}
-
 		newPetModel.UserID = petOwner
 		newPetModel.SetSpecifiedBreed(rb.Breed)
 		newPetModel.SetSpecifiedFamilyName(rb.FamilyName)
-		newPetModel.SetSpecifiedFatherID(rb.FatherID)
-		newPetModel.SetSpecifiedMotherID(rb.MotherID)
-		newPetModel.SetSpecifiedVeterinarianID(rb.VeterinarianID)
 		newPetModel.BeforeCreate()
 
 		if err := newPetModel.Validate(); err != nil {
@@ -154,14 +144,11 @@ func (a *PetsAPI) ServeIDRequest(w http.ResponseWriter, r *http.Request) {
 
 	case http.MethodPut:
 		type requestBody struct {
-			Name           string  `json:"name"`
-			PetType        int     `json:"pet_type"`
-			VeterinarianID *int    `json:"veterinarian_id"`
-			MotherID       *int    `json:"mother_id"`
-			FatherID       *int    `json:"father_id"`
-			Breed          *string `json:"breed"`
-			FamilyName     *string `json:"family_name"`
-			UserID         *int    `json:"user_id"`
+			Name       string  `json:"name"`
+			PetType    int     `json:"pet_type"`
+			Breed      *string `json:"breed"`
+			FamilyName *string `json:"family_name"`
+			UserID     *int    `json:"user_id"`
 		}
 		updatingPet, err := a.server.DatabaseStore().Pets().FindByID(requestedID)
 		if err != nil {
@@ -201,24 +188,9 @@ func (a *PetsAPI) ServeIDRequest(w http.ResponseWriter, r *http.Request) {
 			petOwner = *rb.UserID
 		}
 
-		if rb.VeterinarianID != nil && *rb.VeterinarianID != 0 {
-			specifiedVetRoles, err := a.server.DatabaseStore().Roles().SelectUserRoles(*rb.VeterinarianID)
-			if err != nil {
-				a.server.Respond(w, r, http.StatusUnprocessableEntity, exceptions.UserIsNotVeterinarian)
-				return
-			}
-			if !permissions.AnyRoleIsVeterinarian(specifiedVetRoles) {
-				a.server.Respond(w, r, http.StatusUnprocessableEntity, exceptions.UserIsNotVeterinarian)
-				return
-			}
-		}
-
 		newPetModel.UserID = petOwner
 		newPetModel.SetSpecifiedBreed(rb.Breed)
 		newPetModel.SetSpecifiedFamilyName(rb.FamilyName)
-		newPetModel.SetSpecifiedFatherID(rb.FatherID)
-		newPetModel.SetSpecifiedMotherID(rb.MotherID)
-		newPetModel.SetSpecifiedVeterinarianID(rb.VeterinarianID)
 		newPetModel.BeforeCreate()
 		if err := newPetModel.Validate(); err != nil {
 			a.server.RespondError(w, r, http.StatusUnprocessableEntity, err)
@@ -388,5 +360,99 @@ func (a *PetsAPI) ServeTypesIDRequest(w http.ResponseWriter, r *http.Request) {
 			a.server.RespondError(w, r, http.StatusInternalServerError, nil)
 			return
 		}
+	}
+}
+
+func (a *PetsAPI) ServeVeterinarianRequest(w http.ResponseWriter, r *http.Request) {
+	requestID, session, err := a.server.GetAuthorizedRequestInfo(r)
+	if err != nil {
+		a.server.RespondError(w, r, http.StatusInternalServerError, nil)
+		return
+	}
+	rawID, err := strconv.ParseInt(mux.Vars(r)["id"], 10, 64)
+	if err != nil {
+		a.server.RespondError(w, r, http.StatusBadRequest, exceptions.UnprocessableURIParam)
+		return
+	}
+	requestedID := int(rawID)
+
+	petModel, err := a.server.DatabaseStore().Pets().FindByID(requestedID)
+	if err != nil {
+		if errors.Is(err, sql.ErrNoRows) {
+			a.server.RespondError(w, r, http.StatusNotFound, nil)
+			return
+		}
+		a.server.Logger().Printf("Database err: %v, Request ID: %v", err, requestID)
+		a.server.RespondError(w, r, http.StatusInternalServerError, nil)
+		return
+	}
+
+	switch r.Method {
+	case http.MethodGet:
+		if petModel.VeterinarianID == nil || !petModel.VeterinarianID.Valid {
+			a.server.RespondError(w, r, http.StatusNotFound, nil)
+			return
+		}
+		veterinarianModel, err := a.server.DatabaseStore().Users().FindByID(int(petModel.VeterinarianID.Int64))
+		if err != nil {
+			a.server.Logger().Printf("Database err: %v, Request ID: %v", err, requestID)
+			a.server.RespondError(w, r, http.StatusInternalServerError, nil)
+			return
+		}
+		a.server.Respond(w, r, http.StatusOK, veterinarianModel)
+
+	case http.MethodPost:
+		type requestBody struct {
+			VeterinarianID int `json:"veterinarian_id"`
+		}
+		rb := &requestBody{}
+		if err := json.NewDecoder(r.Body).Decode(rb); err != nil {
+			a.server.RespondError(w, r, http.StatusBadRequest, nil)
+			return
+		}
+		userRoles, err := a.server.DatabaseStore().Roles().SelectUserRoles(rb.VeterinarianID)
+		if err != nil {
+			a.server.Logger().Printf("Database error: %v Request ID %v", err, requestID)
+			a.server.RespondError(w, r, http.StatusInternalServerError, nil)
+			return
+		}
+		if !permissions.AnyRoleIsVeterinarian(userRoles) {
+			a.server.RespondError(w, r, http.StatusUnprocessableEntity, exceptions.UserIsNotVeterinarian)
+			return
+		}
+		if rb.VeterinarianID != session.UserID {
+			if !permissions.AnyRoleHavePermissions(session.Roles, permissions.Permissions().UsersPermission) {
+				a.server.RespondError(w, r, http.StatusForbidden, nil)
+				return
+			}
+		}
+		if petModel.VeterinarianID != nil && petModel.VeterinarianID.Valid {
+			a.server.RespondError(w, r, http.StatusNotFound, exceptions.PetHasVeterinarian)
+			return
+		}
+		if err := a.server.DatabaseStore().Pets().AssignVeterinarian(requestedID, rb.VeterinarianID); err != nil {
+			a.server.Logger().Printf("Database Error: %v Request ID: %v", err, requestID)
+			a.server.RespondError(w, r, http.StatusInternalServerError, nil)
+			return
+		}
+		a.server.Respond(w, r, http.StatusOK, nil)
+
+	case http.MethodDelete:
+		if petModel.VeterinarianID == nil || !petModel.VeterinarianID.Valid {
+			a.server.RespondError(w, r, http.StatusBadRequest, exceptions.PetHasNoVeterinarian)
+			return
+		}
+		if int(petModel.VeterinarianID.Int64) != session.UserID {
+			if !permissions.AnyRoleHavePermissions(session.Roles, permissions.Permissions().UsersPermission) {
+				a.server.RespondError(w, r, http.StatusForbidden, nil)
+				return
+			}
+		}
+		if err := a.server.DatabaseStore().Pets().DeleteVeterinarian(petModel.PetID); err != nil {
+			a.server.Logger().Printf("Database error: %v Request ID: %v", err, requestID)
+			a.server.RespondError(w, r, http.StatusInternalServerError, nil)
+			return
+		}
+		a.server.Respond(w, r, http.StatusOK, nil)
 	}
 }
