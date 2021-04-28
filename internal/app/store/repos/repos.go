@@ -52,6 +52,14 @@ type PetRepository interface {
 	DeleteTypeByID(typeID int) (*models.PetType, error)
 }
 
+type VaccineRepository interface {
+	FindByID(vaccineID int) (*models.Vaccine, error)
+	SelectByPetID(petID int) ([]models.Vaccine, error)
+	Create(vaccine *models.Vaccine) (*models.Vaccine, error)
+	Update(vaccine *models.Vaccine) (*models.Vaccine, error)
+	DeleteByID(vaccineID int) (*models.Vaccine, error)
+}
+
 type DumpRepository interface {
 	Make(savePath string) (*models.Dump, error)
 	InsertNewDumpFile(savePath string) (*models.Dump, error)
