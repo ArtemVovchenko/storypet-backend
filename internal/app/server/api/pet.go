@@ -1293,7 +1293,6 @@ func (a *PetsAPI) ServeEatingRequest(w http.ResponseWriter, r *http.Request) {
 
 	case http.MethodPost:
 		type requestBody struct {
-			PetID  int `json:"pet_id"`
 			FoodID int `json:"food_id"`
 		}
 		rb := &requestBody{}
@@ -1302,7 +1301,7 @@ func (a *PetsAPI) ServeEatingRequest(w http.ResponseWriter, r *http.Request) {
 			return
 		}
 		eatingModel := &models.Eating{
-			PetID:  rb.PetID,
+			PetID:  requestedPetID,
 			FoodID: rb.FoodID,
 			Time:   time.Now(),
 		}
