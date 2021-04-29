@@ -1,9 +1,6 @@
 package sqlxstore
 
-import (
-	"database/sql"
-	"github.com/ArtemVovchenko/storypet-backend/internal/app/models"
-)
+import "github.com/ArtemVovchenko/storypet-backend/internal/app/models"
 
 type PetRepository struct {
 	store *PostgreDatabaseStore
@@ -304,7 +301,7 @@ func (r *PetRepository) SelectAllTypes() ([]models.PetType, error) {
 	return petTypes, nil
 }
 
-func (r *PetRepository) SelectTypeByName(typeName string) (*models.PetType, error) {
+func (r *PetRepository) FindTypeByName(typeName string) (*models.PetType, error) {
 	selectQuery := `SELECT * FROM public.pet_types WHERE type_name = $1;`
 	petType := &models.PetType{}
 	if err := r.store.db.Get(petType, selectQuery, typeName); err != nil {
@@ -314,7 +311,7 @@ func (r *PetRepository) SelectTypeByName(typeName string) (*models.PetType, erro
 	return petType, nil
 }
 
-func (r *PetRepository) SelectTypeByID(typeID int) (*models.PetType, error) {
+func (r *PetRepository) FindTypeByID(typeID int) (*models.PetType, error) {
 	selectQuery := `SELECT * FROM public.pet_types WHERE type_id = $1;`
 	petType := &models.PetType{}
 	if err := r.store.db.Get(petType, selectQuery, typeID); err != nil {
@@ -348,7 +345,7 @@ func (r *PetRepository) CreatePetType(petType *models.PetType) (*models.PetType,
 		return nil, err
 	}
 
-	return r.SelectTypeByName(petType.TypeName)
+	return r.FindTypeByName(petType.TypeName)
 }
 
 func (r *PetRepository) UpdatePetType(other *models.PetType) (*models.PetType, error) {
@@ -378,12 +375,12 @@ func (r *PetRepository) UpdatePetType(other *models.PetType) (*models.PetType, e
 		return nil, err
 	}
 
-	return r.SelectTypeByID(other.TypeID)
+	return r.FindTypeByID(other.TypeID)
 }
 
 func (r *PetRepository) DeleteTypeByID(typeID int) (*models.PetType, error) {
 	deleteQuery := `DELETE FROM public.pet_types WHERE type_id = $1;`
-	deletingType, err := r.SelectTypeByID(typeID)
+	deletingType, err := r.FindTypeByID(typeID)
 	if err != nil {
 		return nil, err
 	}
@@ -409,15 +406,106 @@ func (r *PetRepository) DeleteTypeByID(typeID int) (*models.PetType, error) {
 	return deletingType, nil
 }
 
-func (r *PetRepository) IsUserPetsVeterinarian(userID int, petID int) (bool, error) {
-	query := `SELECT veterinarian_id FROM public.pets WHERE pet_id = $1;`
-	vetID := &sql.NullInt64{}
-	if err := r.store.db.Get(vetID, query, petID); err != nil {
+func (r *PetRepository) FindAnthropometryRecordByID(aID int) (*models.Anthropometry, error) {
+	query := `SELECT * FROM public.anthropometries WHERE record_id = $1`
+	aModel := &models.Anthropometry{}
+	if err := r.store.db.Get(aModel, query, aID); err != nil {
 		r.store.logger.Println(err)
-		return false, err
+		return nil, err
 	}
-	if !vetID.Valid || userID != int(vetID.Int64) {
-		return false, nil
+	return aModel, nil
+}
+
+func (r *PetRepository) SelectPetAnthropometryRecords(petID int) ([]models.Anthropometry, error) {
+	query := `SELECT * FROM public.anthropometries WHERE pet_id = $1 ORDER BY record_time DESC;`
+	var aModels []models.Anthropometry
+	if err := r.store.db.Select(&aModels, query, petID); err != nil {
+		r.store.logger.Println(err)
+		return nil, err
 	}
-	return true, nil
+	return aModels, nil
+}
+
+func (r *PetRepository) SpecifyAnthropometry(anthropometry *models.Anthropometry) (*models.Anthropometry, error) {
+	query := `INSERT INTO public.anthropometries (pet_id, record_time, height, weight) VALUES ($1, $2, $3, $4) RETURNING record_id;`
+	var anthropometryID int
+
+	transaction, err := r.store.db.Beginx()
+	if err != nil {
+		r.store.logger.Println(err)
+		return nil, err
+	}
+	defer func() {
+		_ = transaction.Rollback()
+	}()
+
+	if err := transaction.QueryRowx(
+		query,
+		anthropometry.PetID,
+		anthropometry.Time,
+		anthropometry.Height,
+		anthropometry.Weight,
+	).Scan(&anthropometryID); err != nil {
+		r.store.logger.Println(err)
+		return nil, err
+	}
+
+	if err := transaction.Commit(); err != nil {
+		r.store.logger.Println(err)
+		return nil, err
+	}
+	return r.FindAnthropometryRecordByID(anthropometryID)
+}
+
+func (r *PetRepository) UpdateAnthropometry(anthropometry *models.Anthropometry) (*models.Anthropometry, error) {
+	query := `UPDATE public.anthropometries SET height = :height, weight = :weight WHERE record_id = :record_id;`
+
+	transaction, err := r.store.db.Beginx()
+	if err != nil {
+		r.store.logger.Println(err)
+		return nil, err
+	}
+	defer func() {
+		_ = transaction.Rollback()
+	}()
+
+	if _, err := transaction.NamedExec(query, anthropometry); err != nil {
+		r.store.logger.Println(err)
+		return nil, err
+	}
+
+	if err := transaction.Commit(); err != nil {
+		r.store.logger.Println(err)
+		return nil, err
+	}
+	return r.FindAnthropometryRecordByID(anthropometry.RecordID)
+}
+
+func (r *PetRepository) DeleteAnthropometryByID(aID int) (*models.Anthropometry, error) {
+	query := `DELETE FROM public.anthropometries WHERE record_id = $1;`
+	deletingModel, err := r.FindAnthropometryRecordByID(aID)
+	if err != nil {
+		return nil, err
+	}
+
+	transaction, err := r.store.db.Beginx()
+	if err != nil {
+		r.store.logger.Println(err)
+		return nil, err
+	}
+	defer func() {
+		_ = transaction.Rollback()
+	}()
+
+	if _, err := transaction.Exec(query, aID); err != nil {
+		r.store.logger.Println(err)
+		return nil, err
+	}
+
+	if err := transaction.Commit(); err != nil {
+		r.store.logger.Println(err)
+		return nil, err
+	}
+
+	return deletingModel, nil
 }

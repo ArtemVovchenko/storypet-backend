@@ -8,7 +8,6 @@ import (
 	"github.com/ArtemVovchenko/storypet-backend/internal/app/permissions"
 	"github.com/ArtemVovchenko/storypet-backend/internal/app/server/api/exceptions"
 	"github.com/gorilla/mux"
-	jsontime "github.com/liamylian/jsontime/v2/v2"
 	"net/http"
 	"strconv"
 	"time"
@@ -61,15 +60,15 @@ func (a *PetsAPI) ConfigureRouter(router *mux.Router) {
 		Methods(http.MethodPost).
 		HandlerFunc(a.ServeParentsVerificationRequest)
 
-	sb.Path("/{id:[0-9]+}/vaccines").
-		Name("Pets vaccines Request").
+	sb.Path("/{id:[0-9]+}/stats").
+		Name("Pets Stats Request").
 		Methods(http.MethodGet, http.MethodPost).
-		HandlerFunc(a.ServePetsVaccinesRequest)
+		HandlerFunc(a.ServePetStatsRequest)
 
-	sb.Path("/{id:[0-9]+}/vaccines/{vaccine:[0-9]+}").
-		Name("Pets vaccines Request").
+	sb.Path("/{id:[0-9]+}/stats/{recID:[0-9]+}").
+		Name("Pets Stat ID Request").
 		Methods(http.MethodGet, http.MethodPut, http.MethodDelete).
-		HandlerFunc(a.ServePetsVaccineRequest)
+		HandlerFunc(a.ServePetStatsIDRequest)
 }
 
 func (a *PetsAPI) ServeRootRequest(w http.ResponseWriter, r *http.Request) {
@@ -330,7 +329,7 @@ func (a *PetsAPI) ServeTypesIDRequest(w http.ResponseWriter, r *http.Request) {
 
 	switch r.Method {
 	case http.MethodGet:
-		typeModel, err := a.server.DatabaseStore().Pets().SelectTypeByID(requestedID)
+		typeModel, err := a.server.DatabaseStore().Pets().FindTypeByID(requestedID)
 		if err != nil {
 			if errors.Is(err, sql.ErrNoRows) {
 				a.server.RespondError(w, r, http.StatusNotFound, nil)
@@ -677,7 +676,7 @@ func (a *PetsAPI) ServeParentsVerificationRequest(w http.ResponseWriter, r *http
 	}
 }
 
-func (a *PetsAPI) ServePetsVaccinesRequest(w http.ResponseWriter, r *http.Request) {
+func (a *PetsAPI) ServePetStatsRequest(w http.ResponseWriter, r *http.Request) {
 	if r.Method == http.MethodOptions {
 		return
 	}
@@ -691,77 +690,74 @@ func (a *PetsAPI) ServePetsVaccinesRequest(w http.ResponseWriter, r *http.Reques
 		a.server.RespondError(w, r, http.StatusBadRequest, exceptions.UnprocessableURIParam)
 		return
 	}
-	requestedPetID := int(rawID)
-
-	petModel, err := a.server.DatabaseStore().Pets().FindByID(requestedPetID)
-	if err != nil {
-		if errors.Is(err, sql.ErrNoRows) {
-			a.server.RespondError(w, r, http.StatusNotFound, nil)
-			return
-		}
-		a.server.Logger().Printf("Database err: %v, Request ID: %v", err, requestID)
-		a.server.RespondError(w, r, http.StatusInternalServerError, nil)
-		return
-	}
+	requestedID := int(rawID)
 
 	switch r.Method {
 	case http.MethodGet:
-		vaccines, err := a.server.DatabaseStore().Vaccines().SelectByPetID(requestedPetID)
+		petStats, err := a.server.DatabaseStore().Pets().SelectPetAnthropometryRecords(requestedID)
 		if err != nil {
 			if errors.Is(err, sql.ErrNoRows) {
-				a.server.Respond(w, r, http.StatusOK, nil)
+				a.server.RespondError(w, r, http.StatusNotFound, nil)
 				return
 			}
-			a.server.Logger().Printf("Database error: $v Request ID: %v", err, requestID)
+			a.server.Logger().Printf("Database error: %v Request ID %v", err, requestID)
 			a.server.RespondError(w, r, http.StatusInternalServerError, nil)
 			return
 		}
-		a.server.Respond(w, r, http.StatusOK, vaccines)
+		a.server.Respond(w, r, http.StatusOK, petStats)
 
 	case http.MethodPost:
 		type requestBody struct {
-			VaccineName        string    `json:"name"`
-			VaccinationDate    time.Time `json:"vaccination_date" time_format:"date"`
-			VaccineDescription *string   `json:"vaccine_description"`
+			Height float64 `json:"height"`
+			Weight float64 `json:"weight"`
 		}
-		if petModel.VeterinarianID == nil ||
-			!petModel.VeterinarianID.Valid ||
-			int(petModel.VeterinarianID.Int64) != session.UserID {
-			if !permissions.AnyRoleHavePermissions(session.Roles, permissions.All()...) {
-				a.server.RespondError(w, r, http.StatusForbidden, nil)
+		petModel, err := a.server.DatabaseStore().Pets().FindByID(requestedID)
+		if err != nil {
+			if errors.Is(err, sql.ErrNoRows) {
+				a.server.RespondError(w, r, http.StatusNotFound, nil)
 				return
+			}
+			a.server.Logger().Printf("Database error: %v Request ID %v", err, requestID)
+			a.server.RespondError(w, r, http.StatusInternalServerError, nil)
+			return
+		}
+		if session.UserID != petModel.UserID {
+			if petModel.VeterinarianID != nil && int(petModel.VeterinarianID.Int64) != session.UserID {
+				if !permissions.AnyRoleHavePermissions(
+					session.Roles,
+					permissions.Permissions().PetsPermission,
+					permissions.Permissions().UsersPermission) {
+					a.server.RespondError(w, r, http.StatusForbidden, nil)
+					return
+				}
 			}
 		}
 		rb := &requestBody{}
-		var jsonTime = jsontime.ConfigWithCustomTimeFormat
-		jsontime.AddTimeFormatAlias("date", "2006-01-02")
-
-		if err := jsonTime.NewDecoder(r.Body).Decode(rb); err != nil {
+		if err := json.NewDecoder(r.Body).Decode(rb); err != nil {
 			a.server.RespondError(w, r, http.StatusBadRequest, err)
 			return
 		}
-		vaccineModel := &models.Vaccine{
-			PetID:           petModel.PetID,
-			Name:            rb.VaccineName,
-			VaccinationDate: rb.VaccinationDate,
+		recordModel := &models.Anthropometry{
+			PetID:  requestedID,
+			Time:   time.Now(),
+			Height: rb.Height,
+			Weight: rb.Weight,
 		}
-		vaccineModel.SetSpecifiedDescription(rb.VaccineDescription)
-		vaccineModel.BeforeCreate()
-		if err := vaccineModel.Validate(); err != nil {
+		if err := recordModel.Validate(); err != nil {
 			a.server.RespondError(w, r, http.StatusUnprocessableEntity, err)
 			return
 		}
-		vaccineModel, err = a.server.DatabaseStore().Vaccines().Create(vaccineModel)
+		recordModel, err = a.server.DatabaseStore().Pets().SpecifyAnthropometry(recordModel)
 		if err != nil {
-			a.server.Logger().Printf("Database error: %v Request ID: %v", err, requestID)
-			a.server.RespondError(w, r, http.StatusUnprocessableEntity, nil)
+			a.server.Logger().Printf("Database error %v Request ID: %v", err, requestID)
+			a.server.RespondError(w, r, http.StatusInternalServerError, nil)
 			return
 		}
-		a.server.Respond(w, r, http.StatusCreated, vaccineModel)
+		a.server.Respond(w, r, http.StatusCreated, recordModel)
 	}
 }
 
-func (a *PetsAPI) ServePetsVaccineRequest(w http.ResponseWriter, r *http.Request) {
+func (a *PetsAPI) ServePetStatsIDRequest(w http.ResponseWriter, r *http.Request) {
 	if r.Method == http.MethodOptions {
 		return
 	}
@@ -776,101 +772,108 @@ func (a *PetsAPI) ServePetsVaccineRequest(w http.ResponseWriter, r *http.Request
 		return
 	}
 	requestedPetID := int(rawID)
-	rawID, err = strconv.ParseInt(mux.Vars(r)["vaccine"], 10, 64)
+	rawID, err = strconv.ParseInt(mux.Vars(r)["recID"], 10, 64)
 	if err != nil {
 		a.server.RespondError(w, r, http.StatusBadRequest, exceptions.UnprocessableURIParam)
 		return
 	}
-	requestedVaccineID := int(rawID)
+	requestedRecID := int(rawID)
 
-	petModel, err := a.server.DatabaseStore().Pets().FindByID(requestedPetID)
+	record, err := a.server.DatabaseStore().Pets().FindAnthropometryRecordByID(requestedRecID)
 	if err != nil {
 		if errors.Is(err, sql.ErrNoRows) {
 			a.server.RespondError(w, r, http.StatusNotFound, nil)
 			return
 		}
-		a.server.Logger().Printf("Database err: %v, Request ID: %v", err, requestID)
+		a.server.Logger().Printf("Database error: %v Request ID $v", err, requestID)
 		a.server.RespondError(w, r, http.StatusInternalServerError, nil)
 		return
 	}
 
 	switch r.Method {
 	case http.MethodGet:
-		vaccines, err := a.server.DatabaseStore().Vaccines().FindByID(requestedVaccineID)
-		if err != nil {
-			if errors.Is(err, sql.ErrNoRows) {
-				a.server.Respond(w, r, http.StatusNotFound, nil)
-				return
-			}
-			a.server.Logger().Printf("Database error: $v Request ID: %v", err, requestID)
-			a.server.RespondError(w, r, http.StatusInternalServerError, nil)
-			return
-		}
-		a.server.Respond(w, r, http.StatusOK, vaccines)
+		a.server.Respond(w, r, http.StatusOK, record)
 
 	case http.MethodPut:
 		type requestBody struct {
-			VaccineName        string    `json:"name"`
-			VaccinationDate    time.Time `json:"vaccination_date" time_format:"date"`
-			VaccineDescription *string   `json:"vaccine_description"`
+			Height float64 `json:"height"`
+			Weight float64 `json:"weight"`
 		}
-		if petModel.VeterinarianID == nil ||
-			!petModel.VeterinarianID.Valid ||
-			int(petModel.VeterinarianID.Int64) != session.UserID {
-			if !permissions.AnyRoleHavePermissions(session.Roles, permissions.All()...) {
-				a.server.RespondError(w, r, http.StatusForbidden, nil)
+
+		petModel, err := a.server.DatabaseStore().Pets().FindByID(requestedPetID)
+		if err != nil {
+			if errors.Is(err, sql.ErrNoRows) {
+				a.server.RespondError(w, r, http.StatusNotFound, nil)
 				return
+			}
+			a.server.Logger().Printf("Database error: %v Request ID %v", err, requestID)
+			a.server.RespondError(w, r, http.StatusInternalServerError, nil)
+			return
+		}
+		if session.UserID != petModel.UserID {
+			if petModel.VeterinarianID != nil && int(petModel.VeterinarianID.Int64) != session.UserID {
+				if !permissions.AnyRoleHavePermissions(
+					session.Roles,
+					permissions.Permissions().PetsPermission,
+					permissions.Permissions().UsersPermission) {
+					a.server.RespondError(w, r, http.StatusForbidden, nil)
+					return
+				}
 			}
 		}
 		rb := &requestBody{}
-
-		var jsonTime = jsontime.ConfigWithCustomTimeFormat
-		jsontime.AddTimeFormatAlias("date", "2006-01-02")
-
-		if err := jsonTime.NewDecoder(r.Body).Decode(rb); err != nil {
+		if err := json.NewDecoder(r.Body).Decode(rb); err != nil {
 			a.server.RespondError(w, r, http.StatusBadRequest, err)
 			return
 		}
-		vaccineModel := &models.Vaccine{
-			VaccineID:       requestedVaccineID,
-			PetID:           petModel.PetID,
-			Name:            rb.VaccineName,
-			VaccinationDate: rb.VaccinationDate,
+		newRecord := &models.Anthropometry{
+			RecordID: record.RecordID,
+			PetID:    record.PetID,
+			Time:     record.Time,
+			Height:   rb.Height,
+			Weight:   rb.Weight,
 		}
-		vaccineModel.SetSpecifiedDescription(rb.VaccineDescription)
-		vaccineModel.BeforeCreate()
-		if err := vaccineModel.Validate(); err != nil {
+		if err := newRecord.Validate(); err != nil {
 			a.server.RespondError(w, r, http.StatusUnprocessableEntity, err)
 			return
 		}
-		vaccineModel, err = a.server.DatabaseStore().Vaccines().Update(vaccineModel)
+		newRecord, err = a.server.DatabaseStore().Pets().UpdateAnthropometry(newRecord)
 		if err != nil {
-			if errors.Is(err, sql.ErrNoRows) {
-				a.server.Respond(w, r, http.StatusNotFound, nil)
-				return
-			}
-			a.server.Logger().Printf("Database error: %v Request ID: %v", err, requestID)
-			a.server.RespondError(w, r, http.StatusUnprocessableEntity, nil)
+			a.server.Logger().Printf("Database error: %v RequestID: %v", err, requestID)
+			a.server.RespondError(w, r, http.StatusInternalServerError, nil)
 			return
 		}
-		a.server.Respond(w, r, http.StatusOK, vaccineModel)
+		a.server.Respond(w, r, http.StatusOK, newRecord)
 
 	case http.MethodDelete:
-		if petModel.VeterinarianID == nil ||
-			!petModel.VeterinarianID.Valid ||
-			int(petModel.VeterinarianID.Int64) != session.UserID {
-			if !permissions.AnyRoleHavePermissions(session.Roles, permissions.All()...) {
-				a.server.RespondError(w, r, http.StatusForbidden, nil)
+		petModel, err := a.server.DatabaseStore().Pets().FindByID(requestedPetID)
+		if err != nil {
+			if errors.Is(err, sql.ErrNoRows) {
+				a.server.RespondError(w, r, http.StatusNotFound, nil)
 				return
+			}
+			a.server.Logger().Printf("Database error: %v Request ID %v", err, requestID)
+			a.server.RespondError(w, r, http.StatusInternalServerError, nil)
+			return
+		}
+		if session.UserID != petModel.UserID {
+			if petModel.VeterinarianID != nil && int(petModel.VeterinarianID.Int64) != session.UserID {
+				if !permissions.AnyRoleHavePermissions(
+					session.Roles,
+					permissions.Permissions().PetsPermission,
+					permissions.Permissions().UsersPermission) {
+					a.server.RespondError(w, r, http.StatusForbidden, nil)
+					return
+				}
 			}
 		}
-		if _, err := a.server.DatabaseStore().Vaccines().DeleteByID(requestedVaccineID); err != nil {
+		if _, err := a.server.DatabaseStore().Pets().DeleteAnthropometryByID(requestedRecID); err != nil {
 			if errors.Is(err, sql.ErrNoRows) {
-				a.server.Respond(w, r, http.StatusNotFound, nil)
+				a.server.RespondError(w, r, http.StatusNotFound, nil)
 				return
 			}
-			a.server.Logger().Printf("Database error: %v Request ID: %v", err, requestID)
-			a.server.RespondError(w, r, http.StatusUnprocessableEntity, nil)
+			a.server.Logger().Printf("Database error: %v RequestID: %v", err, requestID)
+			a.server.RespondError(w, r, http.StatusInternalServerError, nil)
 			return
 		}
 		a.server.Respond(w, r, http.StatusNoContent, nil)
