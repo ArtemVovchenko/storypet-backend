@@ -4,6 +4,7 @@ import (
 	"database/sql"
 	"errors"
 	"github.com/ArtemVovchenko/storypet-backend/internal/app/models"
+	"strings"
 )
 
 type FoodRepository struct {
@@ -35,10 +36,11 @@ func (r *FoodRepository) FindByID(foodID int) (*models.Food, error) {
 }
 
 func (r *FoodRepository) SelectByNameSimilarity(namePattern string) ([]models.Food, error) {
-	query := `SELECT * FROM public.food WHERE food_name LIKE $1;`
+	query := `SELECT * FROM public.food WHERE LOWER(food_name) LIKE $1;`
 	var foodModels []models.Food
+	pattern := "%" + strings.ToLower(namePattern) + "%"
 
-	if err := r.store.db.Select(&foodModels, query, "%"+namePattern+"%"); err != nil {
+	if err := r.store.db.Select(&foodModels, query, pattern); err != nil {
 		if errors.Is(err, sql.ErrNoRows) {
 			return foodModels, nil
 		}
@@ -55,9 +57,9 @@ func (r *FoodRepository) SelectByNameSimilarity(namePattern string) ([]models.Fo
 func (r *FoodRepository) Create(foodModel *models.Food) (*models.Food, error) {
 	query := `
 		INSERT INTO public.food 
-			(food_name, calories, description, manufacturer) 
+			(food_name, calories, description, manufacturer, creator_id) 
 		VALUES 
-			($1, $2, $3, $4) 
+			($1, $2, $3, $4, $5) 
 		RETURNING food_id;`
 	var newModelID int
 	foodModel.BeforeCreate()
@@ -76,6 +78,7 @@ func (r *FoodRepository) Create(foodModel *models.Food) (*models.Food, error) {
 		foodModel.Calories,
 		foodModel.Description,
 		foodModel.Manufacturer,
+		foodModel.CreatorID,
 	).Scan(&newModelID); err != nil {
 		return nil, err
 	}
@@ -88,14 +91,15 @@ func (r *FoodRepository) Create(foodModel *models.Food) (*models.Food, error) {
 	return foodModel, nil
 }
 
-func (r *FoodRepository) UpdateByID(foodModel *models.Food) (*models.Food, error) {
+func (r *FoodRepository) Update(foodModel *models.Food) (*models.Food, error) {
 	query := `
 		UPDATE public.food 
 		SET 
 			food_name = :food_name, 
 			calories = :calories, 
 			description = :description, 
-			manufacturer = :manufacturer 
+			manufacturer = :manufacturer,
+		    creator_id = :creator_id
 		WHERE food_id = :food_id;`
 	foodModel.BeforeCreate()
 	transaction, err := r.store.db.Beginx()

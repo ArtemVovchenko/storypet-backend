@@ -71,7 +71,7 @@ type FoodRepository interface {
 	FindByID(foodID int) (*models.Food, error)
 	SelectByNameSimilarity(namePattern string) ([]models.Food, error)
 	Create(foodModel *models.Food) (*models.Food, error)
-	UpdateByID(foodModel *models.Food) (*models.Food, error)
+	Update(foodModel *models.Food) (*models.Food, error)
 	DeleteByID(foodID int) (*models.Food, error)
 }
 

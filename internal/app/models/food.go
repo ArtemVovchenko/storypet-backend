@@ -11,15 +11,17 @@ type Food struct {
 	Calories              float64         `json:"food_calories" db:"calories"`
 	Description           *sql.NullString `json:"-" db:"description"`
 	Manufacturer          *sql.NullString `json:"-" db:"manufacturer"`
-	SpecifiedDescription  string          `json:"description"`
-	SpecifiedManufacturer string          `json:"manufacturer"`
+	CreatorID             *sql.NullInt64  `json:"-" db:"creator_id"`
+	SpecifiedDescription  string          `json:"description,omitempty"`
+	SpecifiedManufacturer string          `json:"manufacturer,omitempty"`
+	SpecifiedCreatorID    int             `json:"creator_id"`
 }
 
 func (f *Food) Validate() error {
 	return validation.ValidateStruct(
 		f,
 		validation.Field(&f.FoodName, validation.Required, validation.Length(3, 255)),
-		validation.Field(&f.Calories, validation.Required, validation.Min(0)),
+		validation.Field(&f.Calories, validation.Required, validation.Min(0.0)),
 		validation.Field(&f.SpecifiedDescription, validation.Length(5, 255)),
 		validation.Field(&f.SpecifiedManufacturer, validation.Length(2, 255)),
 	)
@@ -38,6 +40,12 @@ func (f *Food) BeforeCreate() {
 			Valid:  true,
 		}
 	}
+	if f.SpecifiedCreatorID != 0 {
+		f.CreatorID = &sql.NullInt64{
+			Int64: int64(f.SpecifiedCreatorID),
+			Valid: true,
+		}
+	}
 }
 
 func (f *Food) AfterCreate() {
@@ -46,6 +54,9 @@ func (f *Food) AfterCreate() {
 	}
 	if f.Manufacturer != nil && f.Manufacturer.Valid {
 		f.SpecifiedManufacturer = f.Manufacturer.String
+	}
+	if f.CreatorID != nil && f.CreatorID.Valid {
+		f.SpecifiedCreatorID = int(f.CreatorID.Int64)
 	}
 }
 
