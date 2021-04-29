@@ -405,3 +405,107 @@ func (r *PetRepository) DeleteTypeByID(typeID int) (*models.PetType, error) {
 	}
 	return deletingType, nil
 }
+
+func (r *PetRepository) FindAnthropometryRecordByID(aID int) (*models.Anthropometry, error) {
+	query := `SELECT * FROM public.anthropometries WHERE record_id = $1`
+	aModel := &models.Anthropometry{}
+	if err := r.store.db.Get(aModel, query, aID); err != nil {
+		r.store.logger.Println(err)
+		return nil, err
+	}
+	return aModel, nil
+}
+
+func (r *PetRepository) SelectPetAnthropometryRecords(petID int) ([]models.Anthropometry, error) {
+	query := `SELECT * FROM public.anthropometries WHERE pet_id = $1 ORDER BY record_time DESC;`
+	var aModels []models.Anthropometry
+	if err := r.store.db.Select(&aModels, query, petID); err != nil {
+		r.store.logger.Println(err)
+		return nil, err
+	}
+	return aModels, nil
+}
+
+func (r *PetRepository) SpecifyAnthropometry(anthropometry *models.Anthropometry) (*models.Anthropometry, error) {
+	query := `INSERT INTO public.anthropometries (pet_id, record_time, height, weight) VALUES ($1, $2, $3, $4) RETURNING record_id;`
+	var anthropometryID int
+
+	transaction, err := r.store.db.Beginx()
+	if err != nil {
+		r.store.logger.Println(err)
+		return nil, err
+	}
+	defer func() {
+		_ = transaction.Rollback()
+	}()
+
+	if err := transaction.QueryRowx(
+		query,
+		anthropometry.PetID,
+		anthropometry.Time,
+		anthropometry.Height,
+		anthropometry.Weight,
+	).Scan(&anthropometryID); err != nil {
+		r.store.logger.Println(err)
+		return nil, err
+	}
+
+	if err := transaction.Commit(); err != nil {
+		r.store.logger.Println(err)
+		return nil, err
+	}
+	return r.FindAnthropometryRecordByID(anthropometryID)
+}
+
+func (r *PetRepository) UpdateAnthropometry(anthropometry *models.Anthropometry) (*models.Anthropometry, error) {
+	query := `UPDATE public.anthropometries SET height = :height, weight = :weight WHERE record_id = :record_id;`
+
+	transaction, err := r.store.db.Beginx()
+	if err != nil {
+		r.store.logger.Println(err)
+		return nil, err
+	}
+	defer func() {
+		_ = transaction.Rollback()
+	}()
+
+	if _, err := transaction.NamedExec(query, anthropometry); err != nil {
+		r.store.logger.Println(err)
+		return nil, err
+	}
+
+	if err := transaction.Commit(); err != nil {
+		r.store.logger.Println(err)
+		return nil, err
+	}
+	return r.FindAnthropometryRecordByID(anthropometry.RecordID)
+}
+
+func (r *PetRepository) DeleteAnthropometryByID(aID int) (*models.Anthropometry, error) {
+	query := `DELETE FROM public.anthropometries WHERE record_id = $1;`
+	deletingModel, err := r.FindAnthropometryRecordByID(aID)
+	if err != nil {
+		return nil, err
+	}
+
+	transaction, err := r.store.db.Beginx()
+	if err != nil {
+		r.store.logger.Println(err)
+		return nil, err
+	}
+	defer func() {
+		_ = transaction.Rollback()
+	}()
+
+	if _, err := transaction.Exec(query, aID); err != nil {
+		r.store.logger.Println(err)
+		return nil, err
+	}
+
+	if err := transaction.Commit(); err != nil {
+		r.store.logger.Println(err)
+		return nil, err
+	}
+
+	return deletingModel, nil
+}

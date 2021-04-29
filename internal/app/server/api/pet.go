@@ -10,6 +10,7 @@ import (
 	"github.com/gorilla/mux"
 	"net/http"
 	"strconv"
+	"time"
 )
 
 type PetsAPI struct {
@@ -58,6 +59,16 @@ func (a *PetsAPI) ConfigureRouter(router *mux.Router) {
 		Name("Pets parent verification request").
 		Methods(http.MethodPost).
 		HandlerFunc(a.ServeParentsVerificationRequest)
+
+	sb.Path("/{id:[0-9]+}/stats").
+		Name("Pets Stats Request").
+		Methods(http.MethodGet, http.MethodPost).
+		HandlerFunc(a.ServePetStatsRequest)
+
+	sb.Path("/{id:[0-9]+}/stats/{recID:[0-9]+}").
+		Name("Pets Stat ID Request").
+		Methods(http.MethodGet, http.MethodPut, http.MethodDelete).
+		HandlerFunc(a.ServePetStatsIDRequest)
 }
 
 func (a *PetsAPI) ServeRootRequest(w http.ResponseWriter, r *http.Request) {
@@ -318,7 +329,7 @@ func (a *PetsAPI) ServeTypesIDRequest(w http.ResponseWriter, r *http.Request) {
 
 	switch r.Method {
 	case http.MethodGet:
-		typeModel, err := a.server.DatabaseStore().Pets().SelectTypeByID(requestedID)
+		typeModel, err := a.server.DatabaseStore().Pets().FindTypeByID(requestedID)
 		if err != nil {
 			if errors.Is(err, sql.ErrNoRows) {
 				a.server.RespondError(w, r, http.StatusNotFound, nil)
@@ -662,5 +673,209 @@ func (a *PetsAPI) ServeParentsVerificationRequest(w http.ResponseWriter, r *http
 			return
 		}
 		a.server.Respond(w, r, http.StatusOK, nil)
+	}
+}
+
+func (a *PetsAPI) ServePetStatsRequest(w http.ResponseWriter, r *http.Request) {
+	if r.Method == http.MethodOptions {
+		return
+	}
+	requestID, session, err := a.server.GetAuthorizedRequestInfo(r)
+	if err != nil {
+		a.server.RespondError(w, r, http.StatusInternalServerError, nil)
+		return
+	}
+	rawID, err := strconv.ParseInt(mux.Vars(r)["id"], 10, 64)
+	if err != nil {
+		a.server.RespondError(w, r, http.StatusBadRequest, exceptions.UnprocessableURIParam)
+		return
+	}
+	requestedID := int(rawID)
+
+	switch r.Method {
+	case http.MethodGet:
+		petStats, err := a.server.DatabaseStore().Pets().SelectPetAnthropometryRecords(requestedID)
+		if err != nil {
+			if errors.Is(err, sql.ErrNoRows) {
+				a.server.RespondError(w, r, http.StatusNotFound, nil)
+				return
+			}
+			a.server.Logger().Printf("Database error: %v Request ID %v", err, requestID)
+			a.server.RespondError(w, r, http.StatusInternalServerError, nil)
+			return
+		}
+		a.server.Respond(w, r, http.StatusOK, petStats)
+
+	case http.MethodPost:
+		type requestBody struct {
+			Height float64 `json:"height"`
+			Weight float64 `json:"weight"`
+		}
+		petModel, err := a.server.DatabaseStore().Pets().FindByID(requestedID)
+		if err != nil {
+			if errors.Is(err, sql.ErrNoRows) {
+				a.server.RespondError(w, r, http.StatusNotFound, nil)
+				return
+			}
+			a.server.Logger().Printf("Database error: %v Request ID %v", err, requestID)
+			a.server.RespondError(w, r, http.StatusInternalServerError, nil)
+			return
+		}
+		if session.UserID != petModel.UserID {
+			if petModel.VeterinarianID != nil && int(petModel.VeterinarianID.Int64) != session.UserID {
+				if !permissions.AnyRoleHavePermissions(
+					session.Roles,
+					permissions.Permissions().PetsPermission,
+					permissions.Permissions().UsersPermission) {
+					a.server.RespondError(w, r, http.StatusForbidden, nil)
+					return
+				}
+			}
+		}
+		rb := &requestBody{}
+		if err := json.NewDecoder(r.Body).Decode(rb); err != nil {
+			a.server.RespondError(w, r, http.StatusBadRequest, err)
+			return
+		}
+		recordModel := &models.Anthropometry{
+			PetID:  requestedID,
+			Time:   time.Now(),
+			Height: rb.Height,
+			Weight: rb.Weight,
+		}
+		if err := recordModel.Validate(); err != nil {
+			a.server.RespondError(w, r, http.StatusUnprocessableEntity, err)
+			return
+		}
+		recordModel, err = a.server.DatabaseStore().Pets().SpecifyAnthropometry(recordModel)
+		if err != nil {
+			a.server.Logger().Printf("Database error %v Request ID: %v", err, requestID)
+			a.server.RespondError(w, r, http.StatusInternalServerError, nil)
+			return
+		}
+		a.server.Respond(w, r, http.StatusCreated, recordModel)
+	}
+}
+
+func (a *PetsAPI) ServePetStatsIDRequest(w http.ResponseWriter, r *http.Request) {
+	if r.Method == http.MethodOptions {
+		return
+	}
+	requestID, session, err := a.server.GetAuthorizedRequestInfo(r)
+	if err != nil {
+		a.server.RespondError(w, r, http.StatusInternalServerError, nil)
+		return
+	}
+	rawID, err := strconv.ParseInt(mux.Vars(r)["id"], 10, 64)
+	if err != nil {
+		a.server.RespondError(w, r, http.StatusBadRequest, exceptions.UnprocessableURIParam)
+		return
+	}
+	requestedPetID := int(rawID)
+	rawID, err = strconv.ParseInt(mux.Vars(r)["recID"], 10, 64)
+	if err != nil {
+		a.server.RespondError(w, r, http.StatusBadRequest, exceptions.UnprocessableURIParam)
+		return
+	}
+	requestedRecID := int(rawID)
+
+	record, err := a.server.DatabaseStore().Pets().FindAnthropometryRecordByID(requestedRecID)
+	if err != nil {
+		if errors.Is(err, sql.ErrNoRows) {
+			a.server.RespondError(w, r, http.StatusNotFound, nil)
+			return
+		}
+		a.server.Logger().Printf("Database error: %v Request ID $v", err, requestID)
+		a.server.RespondError(w, r, http.StatusInternalServerError, nil)
+		return
+	}
+
+	switch r.Method {
+	case http.MethodGet:
+		a.server.Respond(w, r, http.StatusOK, record)
+
+	case http.MethodPut:
+		type requestBody struct {
+			Height float64 `json:"height"`
+			Weight float64 `json:"weight"`
+		}
+
+		petModel, err := a.server.DatabaseStore().Pets().FindByID(requestedPetID)
+		if err != nil {
+			if errors.Is(err, sql.ErrNoRows) {
+				a.server.RespondError(w, r, http.StatusNotFound, nil)
+				return
+			}
+			a.server.Logger().Printf("Database error: %v Request ID %v", err, requestID)
+			a.server.RespondError(w, r, http.StatusInternalServerError, nil)
+			return
+		}
+		if session.UserID != petModel.UserID {
+			if petModel.VeterinarianID != nil && int(petModel.VeterinarianID.Int64) != session.UserID {
+				if !permissions.AnyRoleHavePermissions(
+					session.Roles,
+					permissions.Permissions().PetsPermission,
+					permissions.Permissions().UsersPermission) {
+					a.server.RespondError(w, r, http.StatusForbidden, nil)
+					return
+				}
+			}
+		}
+		rb := &requestBody{}
+		if err := json.NewDecoder(r.Body).Decode(rb); err != nil {
+			a.server.RespondError(w, r, http.StatusBadRequest, err)
+			return
+		}
+		newRecord := &models.Anthropometry{
+			RecordID: record.RecordID,
+			PetID:    record.PetID,
+			Time:     record.Time,
+			Height:   rb.Height,
+			Weight:   rb.Weight,
+		}
+		if err := newRecord.Validate(); err != nil {
+			a.server.RespondError(w, r, http.StatusUnprocessableEntity, err)
+			return
+		}
+		newRecord, err = a.server.DatabaseStore().Pets().UpdateAnthropometry(newRecord)
+		if err != nil {
+			a.server.Logger().Printf("Database error: %v RequestID: %v", err, requestID)
+			a.server.RespondError(w, r, http.StatusInternalServerError, nil)
+			return
+		}
+		a.server.Respond(w, r, http.StatusOK, newRecord)
+
+	case http.MethodDelete:
+		petModel, err := a.server.DatabaseStore().Pets().FindByID(requestedPetID)
+		if err != nil {
+			if errors.Is(err, sql.ErrNoRows) {
+				a.server.RespondError(w, r, http.StatusNotFound, nil)
+				return
+			}
+			a.server.Logger().Printf("Database error: %v Request ID %v", err, requestID)
+			a.server.RespondError(w, r, http.StatusInternalServerError, nil)
+			return
+		}
+		if session.UserID != petModel.UserID {
+			if petModel.VeterinarianID != nil && int(petModel.VeterinarianID.Int64) != session.UserID {
+				if !permissions.AnyRoleHavePermissions(
+					session.Roles,
+					permissions.Permissions().PetsPermission,
+					permissions.Permissions().UsersPermission) {
+					a.server.RespondError(w, r, http.StatusForbidden, nil)
+					return
+				}
+			}
+		}
+		if _, err := a.server.DatabaseStore().Pets().DeleteAnthropometryByID(requestedRecID); err != nil {
+			if errors.Is(err, sql.ErrNoRows) {
+				a.server.RespondError(w, r, http.StatusNotFound, nil)
+				return
+			}
+			a.server.Logger().Printf("Database error: %v RequestID: %v", err, requestID)
+			a.server.RespondError(w, r, http.StatusInternalServerError, nil)
+			return
+		}
+		a.server.Respond(w, r, http.StatusNoContent, nil)
 	}
 }

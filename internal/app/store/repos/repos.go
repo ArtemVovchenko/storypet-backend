@@ -45,11 +45,17 @@ type PetRepository interface {
 	VerifyFather(petID int) error
 
 	SelectAllTypes() ([]models.PetType, error)
-	SelectTypeByID(typeID int) (*models.PetType, error)
-	SelectTypeByName(typeName string) (*models.PetType, error)
+	FindTypeByID(typeID int) (*models.PetType, error)
+	FindTypeByName(typeName string) (*models.PetType, error)
 	CreatePetType(petType *models.PetType) (*models.PetType, error)
 	UpdatePetType(other *models.PetType) (*models.PetType, error)
 	DeleteTypeByID(typeID int) (*models.PetType, error)
+
+	FindAnthropometryRecordByID(aID int) (*models.Anthropometry, error)
+	SelectPetAnthropometryRecords(petID int) ([]models.Anthropometry, error)
+	SpecifyAnthropometry(anthropometry *models.Anthropometry) (*models.Anthropometry, error)
+	UpdateAnthropometry(anthropometry *models.Anthropometry) (*models.Anthropometry, error)
+	DeleteAnthropometryByID(aID int) (*models.Anthropometry, error)
 }
 
 type DumpRepository interface {

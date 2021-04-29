@@ -195,10 +195,19 @@ func (p *Pet) SetSpecifiedFamilyName(name *string) {
 }
 
 type Anthropometry struct {
-	PetID  int       `json:"pet_id" db:"pet_id"`
-	Time   time.Time `json:"time" db:"time"`
-	Height float64   `json:"height" db:"height"`
-	Weight float64   `json:"weight" db:"weight"`
+	RecordID int       `json:"record_id" db:"record_id"`
+	PetID    int       `json:"pet_id" db:"pet_id"`
+	Time     time.Time `json:"record_time" db:"record_time"`
+	Height   float64   `json:"height" db:"height"`
+	Weight   float64   `json:"weight" db:"weight"`
+}
+
+func (a *Anthropometry) Validate() error {
+	return validation.ValidateStruct(
+		a,
+		validation.Field(&a.Height, validation.Required, validation.Min(0.01)),
+		validation.Field(&a.Weight, validation.Required, validation.Min(0.01)),
+	)
 }
 
 type Activity struct {
