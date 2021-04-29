@@ -551,7 +551,7 @@ func (r *PetRepository) SelectPetActivityRecords(petID int) ([]models.Activity, 
 }
 
 func (r *PetRepository) SelectPetActivityRecordsInInterval(petID int, start time.Time, end time.Time) ([]models.Activity, error) {
-	query := `SELECT * FROM public.activity WHERE pet_id = $1 AND record_timestamp::date <= $2 AND record_timestamp::date <= $3;`
+	query := `SELECT * FROM public.activity WHERE pet_id = $1 AND record_timestamp::date >= $2 AND record_timestamp::date <= $3;`
 	var petActivityModels []models.Activity
 	if err := r.store.db.Select(&petActivityModels, query, petID, start, end); err != nil {
 		r.store.logger.Println(err)

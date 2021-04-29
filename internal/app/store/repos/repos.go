@@ -81,6 +81,9 @@ type FoodRepository interface {
 	Create(foodModel *models.Food) (*models.Food, error)
 	Update(foodModel *models.Food) (*models.Food, error)
 	DeleteByID(foodID int) (*models.Food, error)
+
+	AddPetEating(eating *models.Eating) error
+	GetPetsEatingsForDate(petID int, date time.Time) ([]models.Food, error)
 }
 
 type DumpRepository interface {

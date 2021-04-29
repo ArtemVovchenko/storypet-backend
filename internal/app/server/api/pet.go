@@ -85,6 +85,11 @@ func (a *PetsAPI) ConfigureRouter(router *mux.Router) {
 		Name("Pets Activity Request").
 		Methods(http.MethodGet, http.MethodPost).
 		HandlerFunc(a.ServePetActivityRequest)
+
+	sb.Path("/{id:[0-9]+}/eating").
+		Name("Pets Eating Request").
+		Methods(http.MethodGet, http.MethodPost).
+		HandlerFunc(a.ServeEatingRequest)
 }
 
 func (a *PetsAPI) ServeRootRequest(w http.ResponseWriter, r *http.Request) {
@@ -1239,6 +1244,70 @@ func (a *PetsAPI) ServePetActivityRequest(w http.ResponseWriter, r *http.Request
 		if err := a.server.DatabaseStore().Pets().CreateActivityRecord(model); err != nil {
 			a.server.Logger().Printf("Database error: %v Request ID: %v", err, requestID)
 			a.server.RespondError(w, r, http.StatusInternalServerError, nil)
+			return
+		}
+		a.server.Respond(w, r, http.StatusCreated, nil)
+	}
+}
+
+func (a *PetsAPI) ServeEatingRequest(w http.ResponseWriter, r *http.Request) {
+	if r.Method == http.MethodOptions {
+		return
+	}
+	requestID, _, err := a.server.GetAuthorizedRequestInfo(r)
+	if err != nil {
+		a.server.RespondError(w, r, http.StatusInternalServerError, nil)
+		return
+	}
+	rawID, err := strconv.ParseInt(mux.Vars(r)["id"], 10, 64)
+	if err != nil {
+		a.server.RespondError(w, r, http.StatusBadRequest, exceptions.UnprocessableURIParam)
+		return
+	}
+	requestedPetID := int(rawID)
+
+	switch r.Method {
+	case http.MethodGet:
+		var dateT time.Time
+		date := r.URL.Query().Get("date")
+		if date == "" {
+			dateT = time.Now()
+		} else {
+			dateT, err = time.Parse("2006-01-02", date)
+			if err != nil {
+				a.server.RespondError(w, r, http.StatusBadRequest, exceptions.UnprocessableURLQuery)
+				return
+			}
+		}
+		foodModels, err := a.server.DatabaseStore().Foods().GetPetsEatingsForDate(requestedPetID, dateT)
+		if err != nil {
+			if errors.Is(err, sql.ErrNoRows) {
+				a.server.RespondError(w, r, http.StatusOK, nil)
+				return
+			}
+			a.server.Logger().Printf("Database error: %v Request ID: %v", err, requestID)
+			a.server.RespondError(w, r, http.StatusInternalServerError, nil)
+			return
+		}
+		a.server.Respond(w, r, http.StatusOK, foodModels)
+
+	case http.MethodPost:
+		type requestBody struct {
+			PetID  int `json:"pet_id"`
+			FoodID int `json:"food_id"`
+		}
+		rb := &requestBody{}
+		if err := json.NewDecoder(r.Body).Decode(rb); err != nil {
+			a.server.RespondError(w, r, http.StatusBadRequest, err)
+			return
+		}
+		eatingModel := &models.Eating{
+			PetID:  rb.PetID,
+			FoodID: rb.FoodID,
+			Time:   time.Now(),
+		}
+		if err := a.server.DatabaseStore().Foods().AddPetEating(eatingModel); err != nil {
+			a.server.RespondError(w, r, http.StatusUnprocessableEntity, nil)
 			return
 		}
 		a.server.Respond(w, r, http.StatusCreated, nil)

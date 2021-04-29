@@ -3,6 +3,7 @@ package models
 import (
 	"database/sql"
 	validation "github.com/go-ozzo/ozzo-validation"
+	"time"
 )
 
 type Food struct {
@@ -65,8 +66,23 @@ func (f *Food) SetSpecifiedDescription(description *string) {
 		f.SpecifiedDescription = *description
 	}
 }
+
 func (f *Food) SetSpecifiedManufacturer(manufacturer *string) {
 	if manufacturer != nil {
 		f.SpecifiedManufacturer = *manufacturer
 	}
+}
+
+type Eating struct {
+	PetID  int       `json:"pet_id" db:"pet_id"`
+	FoodID int       `json:"food_id" db:"food_id"`
+	Time   time.Time `json:"time" db:"eating_timestamp"`
+}
+
+func (e *Eating) Validate() error {
+	return validation.ValidateStruct(
+		e,
+		validation.Field(&e.PetID, validation.Required),
+		validation.Field(&e.FoodID, validation.Required),
+	)
 }

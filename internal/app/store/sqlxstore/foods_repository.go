@@ -5,6 +5,7 @@ import (
 	"errors"
 	"github.com/ArtemVovchenko/storypet-backend/internal/app/models"
 	"strings"
+	"time"
 )
 
 type FoodRepository struct {
@@ -149,4 +150,45 @@ func (r *FoodRepository) DeleteByID(foodID int) (*models.Food, error) {
 		return nil, err
 	}
 	return foodModel, nil
+}
+
+func (r *FoodRepository) AddPetEating(eating *models.Eating) error {
+	query := `INSERT INTO public.eatings (eating_timestamp, pet_id, food_id) VALUES (:eating_timestamp, :pet_id, :food_id);`
+	transaction, err := r.store.db.Beginx()
+	if err != nil {
+		r.store.logger.Println(err)
+		return err
+	}
+	defer func() {
+		_ = transaction.Rollback()
+	}()
+
+	if _, err := transaction.NamedExec(query, eating); err != nil {
+		r.store.logger.Println(err)
+		return err
+	}
+
+	if err := transaction.Commit(); err != nil {
+		r.store.logger.Println(err)
+		return err
+	}
+	return nil
+}
+
+func (r *FoodRepository) GetPetsEatingsForDate(petID int, date time.Time) ([]models.Food, error) {
+	query := `
+		SELECT f.food_id, food_name, calories, description, manufacturer FROM public.eatings 
+		JOIN public.food f 
+		ON f.food_id = eatings.food_id
+		WHERE pet_id = $1 AND eating_timestamp::date = $2;`
+
+	var foods []models.Food
+	if err := r.store.db.Select(&foods, query, petID, date); err != nil {
+		r.store.logger.Println(err)
+		return nil, err
+	}
+	for idx := range foods {
+		foods[idx].AfterCreate()
+	}
+	return foods, nil
 }
