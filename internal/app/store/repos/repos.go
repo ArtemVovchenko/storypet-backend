@@ -66,6 +66,15 @@ type VaccineRepository interface {
 	DeleteByID(vaccineID int) (*models.Vaccine, error)
 }
 
+type FoodRepository interface {
+	SelectAll() ([]models.Food, error)
+	FindByID(foodID int) (*models.Food, error)
+	SelectByNameSimilarity(namePattern string) ([]models.Food, error)
+	Create(foodModel *models.Food) (*models.Food, error)
+	UpdateByID(foodModel *models.Food) (*models.Food, error)
+	DeleteByID(foodID int) (*models.Food, error)
+}
+
 type DumpRepository interface {
 	Make(savePath string) (*models.Dump, error)
 	InsertNewDumpFile(savePath string) (*models.Dump, error)

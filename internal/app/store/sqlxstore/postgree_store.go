@@ -18,6 +18,7 @@ type PostgreDatabaseStore struct {
 	roleRepository    *RoleRepository
 	petRepository     *PetRepository
 	vaccineRepository *VaccineRepository
+	foodRepository    *FoodRepository
 	dumpRepository    *DumpRepository
 }
 
@@ -92,6 +93,14 @@ func (s *PostgreDatabaseStore) Vaccines() repos.VaccineRepository {
 		store: s,
 	}
 	return s.vaccineRepository
+}
+
+func (s *PostgreDatabaseStore) Foods() repos.FoodRepository {
+	if s.foodRepository != nil {
+		return s.foodRepository
+	}
+	s.foodRepository = &FoodRepository{store: s}
+	return s.foodRepository
 }
 
 func (s *PostgreDatabaseStore) Dumps() repos.DumpRepository {
