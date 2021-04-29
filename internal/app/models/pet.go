@@ -217,6 +217,14 @@ type Activity struct {
 	PeakSpeed       float64   `json:"peak_speed" db:"peak_speed"`
 }
 
+func (a *Activity) Validate() error {
+	return validation.ValidateStruct(
+		a,
+		validation.Field(&a.PeakSpeed, validation.Required, validation.Min(0.0)),
+		validation.Field(&a.Distance, validation.Required, validation.Min(0.0)),
+	)
+}
+
 type PetHealthReport struct {
 	PetID                   int             `json:"pet_id" db:"pet_id"`
 	ReportTimestamp         time.Time       `json:"report_timestamp" db:"report_timestamp"`

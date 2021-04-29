@@ -1,6 +1,9 @@
 package sqlxstore
 
-import "github.com/ArtemVovchenko/storypet-backend/internal/app/models"
+import (
+	"github.com/ArtemVovchenko/storypet-backend/internal/app/models"
+	"time"
+)
 
 type PetRepository struct {
 	store *PostgreDatabaseStore
@@ -81,8 +84,7 @@ func (r *PetRepository) UpdatePet(pet *models.Pet) (*models.Pet, error) {
 			mother_verified = :mother_verified,
 			father_id = :father_id,
 			father_verified = :father_verified
-		WHERE public.pets.pet_id = :pet_id
-`
+		WHERE public.pets.pet_id = :pet_id`
 
 	updatingPet, err := r.FindByID(pet.PetID)
 	if err != nil {
@@ -508,4 +510,62 @@ func (r *PetRepository) DeleteAnthropometryByID(aID int) (*models.Anthropometry,
 	}
 
 	return deletingModel, nil
+}
+
+func (r *PetRepository) CreateActivityRecord(record *models.Activity) error {
+	query := `
+		INSERT INTO public.activity
+			(record_timestamp, pet_id, distance, peak_speed)
+		VALUES
+			(:record_timestamp, :pet_id, :distance, :peak_speed);`
+
+	transaction, err := r.store.db.Beginx()
+	if err != nil {
+		r.store.logger.Println(err)
+		return err
+	}
+	defer func() {
+		_ = transaction.Rollback()
+	}()
+
+	if _, err := transaction.NamedExec(query, record); err != nil {
+		r.store.logger.Println(err)
+		return err
+	}
+
+	if err := transaction.Commit(); err != nil {
+		r.store.logger.Println(err)
+		return err
+	}
+	return nil
+}
+
+func (r *PetRepository) SelectPetActivityRecords(petID int) ([]models.Activity, error) {
+	query := `SELECT * FROM public.activity WHERE pet_id = $1;`
+	var petActivityModels []models.Activity
+	if err := r.store.db.Select(&petActivityModels, query, petID); err != nil {
+		r.store.logger.Println(err)
+		return nil, err
+	}
+	return petActivityModels, nil
+}
+
+func (r *PetRepository) SelectPetActivityRecordsInInterval(petID int, start time.Time, end time.Time) ([]models.Activity, error) {
+	query := `SELECT * FROM public.activity WHERE pet_id = $1 AND record_timestamp::date <= $2 AND record_timestamp::date <= $3;`
+	var petActivityModels []models.Activity
+	if err := r.store.db.Select(&petActivityModels, query, petID, start, end); err != nil {
+		r.store.logger.Println(err)
+		return nil, err
+	}
+	return petActivityModels, nil
+}
+
+func (r *PetRepository) SelectPetActivityRecordsToTime(petID int, start time.Time) ([]models.Activity, error) {
+	query := `SELECT * FROM public.activity WHERE pet_id = $1 AND record_timestamp::date <= $2;`
+	var petActivityModels []models.Activity
+	if err := r.store.db.Select(&petActivityModels, query, petID, start); err != nil {
+		r.store.logger.Println(err)
+		return nil, err
+	}
+	return petActivityModels, nil
 }
