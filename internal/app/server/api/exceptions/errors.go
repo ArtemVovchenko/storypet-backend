@@ -24,4 +24,6 @@ var (
 	PetHasVeterinarian           = errors.New("can not assign veterinarian to pet, pet currently has a veterinarian")
 	PetHasNoVeterinarian         = errors.New("pet has not a veterinarian")
 	NoParentsSpecified           = errors.New("no parents specified")
+
+	UnprocessableURLQuery = errors.New("can not process provided URL query")
 )

@@ -1,6 +1,9 @@
 package repos
 
-import "github.com/ArtemVovchenko/storypet-backend/internal/app/models"
+import (
+	"github.com/ArtemVovchenko/storypet-backend/internal/app/models"
+	"time"
+)
 
 type UserRepository interface {
 	Create(u *models.User) (*models.User, error)
@@ -56,6 +59,11 @@ type PetRepository interface {
 	SpecifyAnthropometry(anthropometry *models.Anthropometry) (*models.Anthropometry, error)
 	UpdateAnthropometry(anthropometry *models.Anthropometry) (*models.Anthropometry, error)
 	DeleteAnthropometryByID(aID int) (*models.Anthropometry, error)
+
+	CreateActivityRecord(record *models.Activity) error
+	SelectPetActivityRecords(petID int) ([]models.Activity, error)
+	SelectPetActivityRecordsInInterval(petID int, start time.Time, end time.Time) ([]models.Activity, error)
+	SelectPetActivityRecordsToTime(petID int, start time.Time) ([]models.Activity, error)
 }
 
 type VaccineRepository interface {

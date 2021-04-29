@@ -80,6 +80,11 @@ func (a *PetsAPI) ConfigureRouter(router *mux.Router) {
 		Name("Pets Stat ID Request").
 		Methods(http.MethodGet, http.MethodPut, http.MethodDelete).
 		HandlerFunc(a.ServePetStatsIDRequest)
+
+	sb.Path("/{id:[0-9]+}/activity").
+		Name("Pets Activity Request").
+		Methods(http.MethodGet, http.MethodPost).
+		HandlerFunc(a.ServePetActivityRequest)
 }
 
 func (a *PetsAPI) ServeRootRequest(w http.ResponseWriter, r *http.Request) {
@@ -1088,5 +1093,154 @@ func (a *PetsAPI) ServePetStatsIDRequest(w http.ResponseWriter, r *http.Request)
 			return
 		}
 		a.server.Respond(w, r, http.StatusNoContent, nil)
+	}
+}
+
+func (a *PetsAPI) ServePetActivityRequest(w http.ResponseWriter, r *http.Request) {
+	if r.Method == http.MethodOptions {
+		return
+	}
+	requestID, session, err := a.server.GetAuthorizedRequestInfo(r)
+	if err != nil {
+		a.server.RespondError(w, r, http.StatusInternalServerError, nil)
+		return
+	}
+	rawID, err := strconv.ParseInt(mux.Vars(r)["id"], 10, 64)
+	if err != nil {
+		a.server.RespondError(w, r, http.StatusBadRequest, exceptions.UnprocessableURIParam)
+		return
+	}
+	requestedPetID := int(rawID)
+
+	switch r.Method {
+	case http.MethodGet:
+		var recordModels []models.Activity
+		startDate := r.URL.Query().Get("start")
+		endDate := r.URL.Query().Get("end")
+		var startDateT time.Time
+		var endDateT time.Time
+
+		if startDate == "" && endDate == "" {
+			recordModels, err = a.server.DatabaseStore().Pets().SelectPetActivityRecords(requestedPetID)
+			if err != nil {
+				if errors.Is(err, sql.ErrNoRows) {
+					a.server.RespondError(w, r, http.StatusNotFound, nil)
+					return
+				}
+				a.server.Logger().Printf("Database error: %v RequestID: %v", err, requestID)
+				a.server.RespondError(w, r, http.StatusInternalServerError, nil)
+				return
+			}
+			a.server.Respond(w, r, http.StatusOK, recordModels)
+			return
+		}
+
+		if startDate == "" {
+			endDateT, err = time.Parse("2006-01-02", endDate)
+			if err != nil {
+				a.server.RespondError(w, r, http.StatusBadRequest, exceptions.UnprocessableURLQuery)
+				return
+			}
+			recordModels, err = a.server.DatabaseStore().Pets().SelectPetActivityRecordsToTime(requestedPetID, endDateT)
+			if err != nil {
+				if errors.Is(err, sql.ErrNoRows) {
+					a.server.RespondError(w, r, http.StatusNotFound, nil)
+					return
+				}
+				a.server.Logger().Printf("Database error: %v RequestID: %v", err, requestID)
+				a.server.RespondError(w, r, http.StatusInternalServerError, nil)
+				return
+			}
+			a.server.Respond(w, r, http.StatusOK, recordModels)
+			return
+		}
+
+		if endDate == "" {
+			startDateT, err = time.Parse("2006-01-02", startDate)
+			if err != nil {
+				a.server.RespondError(w, r, http.StatusBadRequest, exceptions.UnprocessableURLQuery)
+				return
+			}
+			recordModels, err = a.server.DatabaseStore().Pets().SelectPetActivityRecordsInInterval(requestedPetID, startDateT, time.Now())
+			if err != nil {
+				if errors.Is(err, sql.ErrNoRows) {
+					a.server.RespondError(w, r, http.StatusNotFound, nil)
+					return
+				}
+				a.server.Logger().Printf("Database error: %v RequestID: %v", err, requestID)
+				a.server.RespondError(w, r, http.StatusInternalServerError, nil)
+				return
+			}
+			a.server.Respond(w, r, http.StatusOK, recordModels)
+			return
+		}
+
+		startDateT, err = time.Parse("2006-01-02", startDate)
+		endDateT, err = time.Parse("2006-01-02", endDate)
+		if err != nil {
+			a.server.RespondError(w, r, http.StatusBadRequest, exceptions.UnprocessableURLQuery)
+			return
+		}
+
+		recordModels, err = a.server.DatabaseStore().Pets().SelectPetActivityRecordsInInterval(requestedPetID, startDateT, endDateT)
+		if err != nil {
+			if errors.Is(err, sql.ErrNoRows) {
+				a.server.RespondError(w, r, http.StatusNotFound, nil)
+				return
+			}
+			a.server.Logger().Printf("Database error: %v RequestID: %v", err, requestID)
+			a.server.RespondError(w, r, http.StatusInternalServerError, nil)
+			return
+		}
+		a.server.Respond(w, r, http.StatusOK, recordModels)
+		return
+
+	case http.MethodPost:
+		type requestBody struct {
+			Distance  float64 `json:"distance"`
+			PeakSpeed float64 `json:"peak_speed"`
+		}
+
+		petModel, err := a.server.DatabaseStore().Pets().FindByID(requestedPetID)
+		if err != nil {
+			if errors.Is(err, sql.ErrNoRows) {
+				a.server.RespondError(w, r, http.StatusNotFound, nil)
+				return
+			}
+			a.server.Logger().Printf("Database err: %v, Request ID: %v", err, requestID)
+			a.server.RespondError(w, r, http.StatusInternalServerError, nil)
+			return
+		}
+
+		if session.UserID != petModel.UserID {
+			if !permissions.AnyRoleHavePermissions(
+				session.Roles, permissions.Permissions().PetsPermission,
+				permissions.Permissions().RolesPermission) {
+				a.server.RespondError(w, r, http.StatusForbidden, nil)
+				return
+			}
+		}
+
+		rb := &requestBody{}
+		if err := json.NewDecoder(r.Body).Decode(rb); err != nil {
+			a.server.RespondError(w, r, http.StatusBadRequest, err)
+			return
+		}
+		model := &models.Activity{
+			PetID:           requestedPetID,
+			RecordTimestamp: time.Now(),
+			Distance:        rb.Distance,
+			PeakSpeed:       rb.PeakSpeed,
+		}
+		if err := model.Validate(); err != nil {
+			a.server.RespondError(w, r, http.StatusUnprocessableEntity, err)
+			return
+		}
+		if err := a.server.DatabaseStore().Pets().CreateActivityRecord(model); err != nil {
+			a.server.Logger().Printf("Database error: %v Request ID: %v", err, requestID)
+			a.server.RespondError(w, r, http.StatusInternalServerError, nil)
+			return
+		}
+		a.server.Respond(w, r, http.StatusCreated, nil)
 	}
 }
