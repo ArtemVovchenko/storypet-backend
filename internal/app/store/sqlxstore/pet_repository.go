@@ -301,7 +301,7 @@ func (r *PetRepository) SelectAllTypes() ([]models.PetType, error) {
 	return petTypes, nil
 }
 
-func (r *PetRepository) SelectTypeByName(typeName string) (*models.PetType, error) {
+func (r *PetRepository) FindTypeByName(typeName string) (*models.PetType, error) {
 	selectQuery := `SELECT * FROM public.pet_types WHERE type_name = $1;`
 	petType := &models.PetType{}
 	if err := r.store.db.Get(petType, selectQuery, typeName); err != nil {
@@ -311,7 +311,7 @@ func (r *PetRepository) SelectTypeByName(typeName string) (*models.PetType, erro
 	return petType, nil
 }
 
-func (r *PetRepository) SelectTypeByID(typeID int) (*models.PetType, error) {
+func (r *PetRepository) FindTypeByID(typeID int) (*models.PetType, error) {
 	selectQuery := `SELECT * FROM public.pet_types WHERE type_id = $1;`
 	petType := &models.PetType{}
 	if err := r.store.db.Get(petType, selectQuery, typeID); err != nil {
@@ -345,7 +345,7 @@ func (r *PetRepository) CreatePetType(petType *models.PetType) (*models.PetType,
 		return nil, err
 	}
 
-	return r.SelectTypeByName(petType.TypeName)
+	return r.FindTypeByName(petType.TypeName)
 }
 
 func (r *PetRepository) UpdatePetType(other *models.PetType) (*models.PetType, error) {
@@ -375,12 +375,12 @@ func (r *PetRepository) UpdatePetType(other *models.PetType) (*models.PetType, e
 		return nil, err
 	}
 
-	return r.SelectTypeByID(other.TypeID)
+	return r.FindTypeByID(other.TypeID)
 }
 
 func (r *PetRepository) DeleteTypeByID(typeID int) (*models.PetType, error) {
 	deleteQuery := `DELETE FROM public.pet_types WHERE type_id = $1;`
-	deletingType, err := r.SelectTypeByID(typeID)
+	deletingType, err := r.FindTypeByID(typeID)
 	if err != nil {
 		return nil, err
 	}
