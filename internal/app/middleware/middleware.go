@@ -9,7 +9,7 @@ import (
 type CtxKeys int
 
 const (
-	CtxReqestUUID CtxKeys = iota
+	CtxRequestUUID CtxKeys = iota
 	CtxAccessUUID
 )
 

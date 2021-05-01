@@ -63,7 +63,7 @@ func (a *UserAPI) ServeRegistrationRequest(w http.ResponseWriter, r *http.Reques
 	}
 	switch r.Method {
 	case http.MethodPost:
-		requestUUID := r.Context().Value(middleware.CtxReqestUUID).(string)
+		requestUUID := r.Context().Value(middleware.CtxRequestUUID).(string)
 		type requestBody struct {
 			AccountEmail string  `json:"account_email"`
 			Password     string  `json:"password"`
@@ -104,7 +104,7 @@ func (a *UserAPI) ServeRootRequest(w http.ResponseWriter, r *http.Request) {
 	}
 	switch r.Method {
 	case http.MethodGet:
-		requestID := r.Context().Value(middleware.CtxReqestUUID).(string)
+		requestID := r.Context().Value(middleware.CtxRequestUUID).(string)
 		users, err := a.server.DatabaseStore().Users().SelectAll()
 		if err != nil {
 			a.server.Logger().Printf("Database err: %v, Request ID: %s", requestID)

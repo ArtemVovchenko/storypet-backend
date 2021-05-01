@@ -132,7 +132,7 @@ func (s *Server) configureStore() error {
 }
 
 func (s *Server) GetAuthorizedRequestInfo(r *http.Request) (string, *sessions.Session, error) {
-	requestID := r.Context().Value(middleware.CtxReqestUUID).(string)
+	requestID := r.Context().Value(middleware.CtxRequestUUID).(string)
 	accessID := r.Context().Value(middleware.CtxAccessUUID).(string)
 
 	session, err := s.persistentStore.GetSessionInfo(accessID)
