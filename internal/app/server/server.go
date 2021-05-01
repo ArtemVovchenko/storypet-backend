@@ -98,7 +98,7 @@ func (s *Server) Respond(w http.ResponseWriter, _ *http.Request, statusCode int,
 }
 
 func (s *Server) configureRouter() {
-	headersOK := handlers.AllowedHeaders([]string{"X-Requested-With", "Content-Type", "X-Request-ID"})
+	headersOK := handlers.AllowedHeaders([]string{"X-Requested-With", "Content-Type", "X-Request-ID", "Authorization"})
 	originsOK := handlers.AllowedOrigins([]string{"*"})
 	methodsOK := handlers.AllowedMethods([]string{"GET", "POST", "OPTIONS", "DELETE", "PUT"})
 
