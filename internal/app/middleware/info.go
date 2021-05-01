@@ -27,9 +27,6 @@ func NewInfoMiddleware(server server) *InfoMiddleware {
 
 func (m *InfoMiddleware) MarkRequest(next http.Handler) http.Handler {
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		if r.Method == http.MethodOptions {
-			return
-		}
 		requestUUID := uuid.NewV4().String()
 		r.Header.Set(hdrReqUUID, requestUUID)
 		next.ServeHTTP(w, r.WithContext(context.WithValue(r.Context(), CtxReqestUUID, requestUUID)))
@@ -38,6 +35,9 @@ func (m *InfoMiddleware) MarkRequest(next http.Handler) http.Handler {
 
 func (m *InfoMiddleware) LogRequest(next http.Handler) http.Handler {
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if r.Method == http.MethodOptions {
+			return
+		}
 		m.server.Logger().Printf("Request %s %s : ID: %s", r.Method, r.RequestURI, r.Header.Get(hdrReqUUID))
 		rw := &responseWriter{w, http.StatusOK}
 
