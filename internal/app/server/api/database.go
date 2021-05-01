@@ -58,6 +58,9 @@ func (a *DatabaseAPI) ConfigureRoutes(router *mux.Router) {
 }
 
 func (a *DatabaseAPI) ServeRootRequest(w http.ResponseWriter, r *http.Request) {
+	if r.Method == http.MethodOptions {
+		return
+	}
 	switch r.Method {
 	case http.MethodGet:
 		dumpFiles, err := a.server.DatabaseStore().Dumps().SelectAll()
@@ -97,6 +100,9 @@ func (a *DatabaseAPI) ServeRootRequest(w http.ResponseWriter, r *http.Request) {
 }
 
 func (a *DatabaseAPI) ServeRequestByDumpName(w http.ResponseWriter, r *http.Request) {
+	if r.Method == http.MethodOptions {
+		return
+	}
 	dumpFileName := mux.Vars(r)["fileName"]
 	switch r.Method {
 	case http.MethodGet:
@@ -135,6 +141,9 @@ func (a *DatabaseAPI) ServeRequestByDumpName(w http.ResponseWriter, r *http.Requ
 }
 
 func (a *DatabaseAPI) ServeDumpingRequest(w http.ResponseWriter, r *http.Request) {
+	if r.Method == http.MethodOptions {
+		return
+	}
 	switch r.Method {
 	case http.MethodGet:
 		dumpRecord, err := a.server.DatabaseStore().Dumps().Make(a.server.DumpFilesFolder())
@@ -147,6 +156,9 @@ func (a *DatabaseAPI) ServeDumpingRequest(w http.ResponseWriter, r *http.Request
 }
 
 func (a *DatabaseAPI) ServeDumpDownloadRequest(w http.ResponseWriter, r *http.Request) {
+	if r.Method == http.MethodOptions {
+		return
+	}
 	switch r.Method {
 	case http.MethodGet:
 		dumpFileName := mux.Vars(r)["fileName"]

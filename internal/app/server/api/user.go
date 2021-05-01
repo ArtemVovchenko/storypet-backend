@@ -58,6 +58,9 @@ func (a *UserAPI) ConfigureRoutes(router *mux.Router) {
 }
 
 func (a *UserAPI) ServeRegistrationRequest(w http.ResponseWriter, r *http.Request) {
+	if r.Method == http.MethodOptions {
+		return
+	}
 	switch r.Method {
 	case http.MethodPost:
 		requestUUID := r.Context().Value(middleware.CtxReqestUUID).(string)
@@ -96,6 +99,9 @@ func (a *UserAPI) ServeRegistrationRequest(w http.ResponseWriter, r *http.Reques
 }
 
 func (a *UserAPI) ServeRootRequest(w http.ResponseWriter, r *http.Request) {
+	if r.Method == http.MethodOptions {
+		return
+	}
 	switch r.Method {
 	case http.MethodGet:
 		requestID := r.Context().Value(middleware.CtxReqestUUID).(string)
@@ -110,6 +116,9 @@ func (a *UserAPI) ServeRootRequest(w http.ResponseWriter, r *http.Request) {
 }
 
 func (a *UserAPI) ServeRequestByID(w http.ResponseWriter, r *http.Request) {
+	if r.Method == http.MethodOptions {
+		return
+	}
 	requestID, session, err := a.server.GetAuthorizedRequestInfo(r)
 	if err != nil {
 		a.server.RespondError(w, r, http.StatusInternalServerError, nil)
@@ -198,6 +207,9 @@ func (a *UserAPI) ServeRequestByID(w http.ResponseWriter, r *http.Request) {
 }
 
 func (a *UserAPI) ServeRoleRequest(w http.ResponseWriter, r *http.Request) {
+	if r.Method == http.MethodOptions {
+		return
+	}
 	requestID, session, err := a.server.GetAuthorizedRequestInfo(r)
 	if err != nil {
 		a.server.RespondError(w, r, http.StatusInternalServerError, nil)
@@ -310,6 +322,9 @@ func (a *UserAPI) ServeRoleRequest(w http.ResponseWriter, r *http.Request) {
 }
 
 func (a *UserAPI) ServePasswordChangeRequest(w http.ResponseWriter, r *http.Request) {
+	if r.Method == http.MethodOptions {
+		return
+	}
 	switch r.Method {
 	case http.MethodPost:
 		type requestBody struct {
@@ -354,6 +369,9 @@ func (a *UserAPI) ServePasswordChangeRequest(w http.ResponseWriter, r *http.Requ
 }
 
 func (a *UserAPI) ServeClinicRequest(w http.ResponseWriter, r *http.Request) {
+	if r.Method == http.MethodOptions {
+		return
+	}
 	requestID, session, err := a.server.GetAuthorizedRequestInfo(r)
 	if err != nil {
 		a.server.RespondError(w, r, http.StatusInternalServerError, nil)

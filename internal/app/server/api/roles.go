@@ -37,6 +37,9 @@ func (a *RolesAPI) ConfigureRouter(router *mux.Router) {
 }
 
 func (a *RolesAPI) ServeRootRequest(w http.ResponseWriter, r *http.Request) {
+	if r.Method == http.MethodOptions {
+		return
+	}
 	switch r.Method {
 	case http.MethodGet:
 		roleModels, err := a.server.DatabaseStore().Roles().SelectAll()
@@ -87,6 +90,9 @@ func (a *RolesAPI) ServeRootRequest(w http.ResponseWriter, r *http.Request) {
 }
 
 func (a *RolesAPI) ServeIDRequest(w http.ResponseWriter, r *http.Request) {
+	if r.Method == http.MethodOptions {
+		return
+	}
 	rawID, err := strconv.ParseInt(mux.Vars(r)["id"], 10, 64)
 	if err != nil {
 		a.server.RespondError(w, r, http.StatusBadRequest, exceptions.UnprocessableURIParam)

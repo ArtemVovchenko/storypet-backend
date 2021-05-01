@@ -53,6 +53,9 @@ func (a SessionAPI) ConfigureRoutes(router *mux.Router) {
 }
 
 func (a *SessionAPI) ServeLoginRequest(w http.ResponseWriter, r *http.Request) {
+	if r.Method == http.MethodOptions {
+		return
+	}
 	switch r.Method {
 	case http.MethodPost:
 		type requestBody struct {
@@ -96,6 +99,9 @@ func (a *SessionAPI) ServeLoginRequest(w http.ResponseWriter, r *http.Request) {
 }
 
 func (a *SessionAPI) ServeLogoutRequest(w http.ResponseWriter, r *http.Request) {
+	if r.Method == http.MethodOptions {
+		return
+	}
 	switch r.Method {
 	case http.MethodPost:
 		accessInfo, err := auth.ExtractAccessMeta(r)
@@ -112,6 +118,9 @@ func (a *SessionAPI) ServeLogoutRequest(w http.ResponseWriter, r *http.Request) 
 }
 
 func (a *SessionAPI) ServeRefreshRequest(w http.ResponseWriter, r *http.Request) {
+	if r.Method == http.MethodOptions {
+		return
+	}
 	switch r.Method {
 	case http.MethodPost:
 		type requestBody struct {
@@ -161,6 +170,9 @@ func (a *SessionAPI) ServeRefreshRequest(w http.ResponseWriter, r *http.Request)
 }
 
 func (a *SessionAPI) ServeSessionInfoRequest(w http.ResponseWriter, r *http.Request) {
+	if r.Method == http.MethodOptions {
+		return
+	}
 	switch r.Method {
 	case http.MethodGet:
 		accessInfo, err := auth.ExtractAccessMeta(r)
