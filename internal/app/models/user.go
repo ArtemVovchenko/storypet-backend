@@ -112,7 +112,6 @@ func (u *User) Validate() error {
 		validation.Field(&u.Password, validation.By(requiredIf(u.PasswordSHA256 != "")), is.Alphanumeric, validation.Length(6, 100)),
 		validation.Field(&u.Username, validation.Required, validation.Length(5, 30)),
 		validation.Field(&u.FullName, validation.Required, validation.Length(5, 30)),
-		validation.Field(&u.SpecifiedBackupEmail, is.Email),
 	)
 }
 

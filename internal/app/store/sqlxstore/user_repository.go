@@ -228,6 +228,13 @@ func (r *UserRepository) AssignRole(userID int, roleID int) error {
 		_ = transaction.Rollback()
 	}()
 	if _, err := r.store.db.Exec(
+		`DELETE FROM public.user_roles WHERE user_id = $1;`,
+		userID,
+	); err != nil {
+		r.store.logger.Println(err)
+		return err
+	}
+	if _, err := r.store.db.Exec(
 		`INSERT INTO public.user_roles (user_id, role_id) VALUES ($1, $2);`,
 		userID,
 		roleID,

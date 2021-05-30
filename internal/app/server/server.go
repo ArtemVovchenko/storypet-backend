@@ -98,15 +98,35 @@ func (s *Server) Respond(w http.ResponseWriter, _ *http.Request, statusCode int,
 }
 
 func (s *Server) configureRouter() {
-	headersOK := handlers.AllowedHeaders([]string{"X-Requested-With", "Content-Type", "X-Request-ID", "Authorization"})
+	headersOK := handlers.AllowedHeaders([]string{
+		"Accept",
+		"Content-Type",
+		"Authorization",
+		"Content-Length",
+		"Accept-Encoding",
+		"X-CSRF-Token",
+		"Origin",
+		"Accept",
+		"Content-Disposition",
+		"X-Requested-With",
+	})
 	originsOK := handlers.AllowedOrigins([]string{"*"})
-	methodsOK := handlers.AllowedMethods([]string{"GET", "POST", "OPTIONS", "DELETE", "PUT"})
+	methodsOK := handlers.AllowedMethods([]string{
+		"GET",
+		"POST",
+		"OPTIONS",
+		"DELETE",
+		"PUT",
+		"PATCH",
+		"HEAD",
+	})
 
-	s.router.Use(handlers.CORS(originsOK, headersOK, methodsOK))
+	s.router.Methods(http.MethodOptions)
 	s.router.Use(s.middleware.InfoMiddleware.MarkRequest)
 	s.router.Use(s.middleware.InfoMiddleware.LogRequest)
+	s.router.Use(handlers.CORS(originsOK, headersOK, methodsOK))
+	s.router.Use(s.middleware.InfoMiddleware.ProvideOptionsRequest)
 	s.router.Use(s.middleware.ResponseWriting.JSONBody)
-	s.router.Methods(http.MethodOptions)
 
 	s.databaseAPI.ConfigureRoutes(s.router)
 	s.sessionAPI.ConfigureRoutes(s.router)

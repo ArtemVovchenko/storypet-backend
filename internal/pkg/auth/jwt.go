@@ -38,8 +38,8 @@ func CreateToken(userID int) (*TokenPairInfo, error) {
 	tInfo := &TokenPairInfo{
 		AccessUUID:     uuid.NewV4().String(),
 		RefreshUUID:    uuid.NewV4().String(),
-		AccessExpires:  time.Now().Add(time.Hour * 24 * 7).Unix(),
-		RefreshExpires: time.Now().Add(time.Hour * 24 * 7).Unix(),
+		AccessExpires:  time.Now().Add(time.Minute * 10).Unix(),
+		RefreshExpires: time.Now().Add(time.Minute * 20).Unix(),
 	}
 
 	accessClaims := jwt.MapClaims{}
