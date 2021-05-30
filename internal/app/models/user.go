@@ -31,12 +31,12 @@ type VetClinic struct {
 
 type RegisterStatistics struct {
 	Date               time.Time `json:"date" db:"registration_date"`
-	RegistrationsCount int       `json:"registrations_count"`
+	RegistrationsCount int       `json:"registrations_count" db:"registrations_count"`
 }
 
 type SubscribeStatistics struct {
-	Date               time.Time `json:"date" db:"registration_date"`
-	SubscriptionsCount int       `json:"registrations_count"`
+	Date               time.Time `json:"date" db:"subscriptions_count"`
+	SubscriptionsCount int       `json:"registrations_count" db:"subscriptions_count"`
 }
 
 func (u *User) BeforeCreate() error {
