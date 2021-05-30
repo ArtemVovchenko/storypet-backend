@@ -56,6 +56,11 @@ func (a *UserAPI) ConfigureRoutes(router *mux.Router) {
 		Name("Veterinarian clinic By ID").
 		Methods(http.MethodGet, http.MethodPost, http.MethodPut, http.MethodDelete).
 		HandlerFunc(a.ServeClinicRequest)
+
+	sb.Path("/statistic").
+		Name("Get Statistics for users").
+		Methods(http.MethodGet).
+		HandlerFunc(a.ServeStatisticsRequest)
 }
 
 func (a *UserAPI) ServeRegistrationRequest(w http.ResponseWriter, r *http.Request) {
@@ -493,4 +498,24 @@ func (a *UserAPI) ServeClinicRequest(w http.ResponseWriter, r *http.Request) {
 		}
 		a.server.RespondError(w, r, http.StatusNoContent, nil)
 	}
+}
+
+func (a *UserAPI) ServeStatisticsRequest(w http.ResponseWriter, r *http.Request) {
+	type responseBody struct {
+		Registrations  []models.RegisterStatistics  `json:"registrations"`
+		Subscription   []models.SubscribeStatistics `json:"subscription"`
+		LastSubscribed []models.User                `json:"last_subscribed"`
+	}
+	registrations, subscription, lastSubscribed, err := a.server.DatabaseStore().Users().GetStatistics()
+	if err != nil {
+		a.server.RespondError(w, r, http.StatusInternalServerError, err)
+		a.server.Logger().Println(err)
+		return
+	}
+	resp := &responseBody{
+		Registrations:  registrations,
+		Subscription:   subscription,
+		LastSubscribed: lastSubscribed,
+	}
+	a.server.Respond(w, r, http.StatusOK, resp)
 }

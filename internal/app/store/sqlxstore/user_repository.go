@@ -399,3 +399,43 @@ func (r *UserRepository) DeleteClinic(userID int) (*models.VetClinic, error) {
 
 	return deletedModel, nil
 }
+
+func (r *UserRepository) GetStatistics() ([]models.RegisterStatistics, []models.SubscribeStatistics, []models.User, error) {
+	var registers []models.RegisterStatistics
+	var subscriptions []models.SubscribeStatistics
+	var users []models.User
+	if err := r.store.db.Select(
+		&registers,
+		`
+			SELECT registration_date, COUNT(user_id) AS registrations_count FROM (
+    			SELECT DATE(registration_date) AS registration_date,  user_id AS user_id FROM users WHERE registration_date iS NOT NULL
+    		) AS tmp GROUP BY tmp.registration_date;`,
+	); err != nil {
+		r.store.logger.Println(err)
+		return nil, nil, nil, err
+	}
+
+	if err := r.store.db.Select(
+		&subscriptions,
+		`
+			 SELECT subscription_date, COUNT(user_id) AS subscriptions_count FROM (
+    		 	 SELECT DATE(subscription_date) AS subscription_date, user_id AS user_id FROM users WHERE subscription_date IS NOT NULL
+    		 ) AS tmp GROUP BY tmp.subscription_date;`,
+	); err != nil {
+		r.store.logger.Println(err)
+		return nil, nil, nil, err
+	}
+
+	if err := r.store.db.Select(
+		&users,
+		`SELECT * FROM public.users WHERE subscription_date IS NOT NULL ORDER BY subscription_date DESC;`,
+	); err != nil {
+		r.store.logger.Println(err)
+		return nil, nil, nil, err
+	}
+
+	for idx := range users {
+		users[idx].AfterCreate()
+	}
+	return registers, subscriptions, users, nil
+}

@@ -21,6 +21,8 @@ type UserRepository interface {
 	CreateClinic(clinic *models.VetClinic) (*models.VetClinic, error)
 	UpdateClinic(clinic *models.VetClinic) (*models.VetClinic, error)
 	DeleteClinic(userID int) (*models.VetClinic, error)
+
+	GetStatistics() ([]models.RegisterStatistics, []models.SubscribeStatistics, []models.User, error)
 }
 
 type RoleRepository interface {

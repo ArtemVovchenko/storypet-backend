@@ -29,6 +29,16 @@ type VetClinic struct {
 	ClinicName string `json:"clinic_name" db:"clinic_name"`
 }
 
+type RegisterStatistics struct {
+	Date               time.Time `json:"date" db:"registration_date"`
+	RegistrationsCount int       `json:"registrations_count"`
+}
+
+type SubscribeStatistics struct {
+	Date               time.Time `json:"date" db:"registration_date"`
+	SubscriptionsCount int       `json:"registrations_count"`
+}
+
 func (u *User) BeforeCreate() error {
 	if len(u.Password) > 0 {
 		enc, err := encryptString(u.Password)
