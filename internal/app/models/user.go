@@ -35,8 +35,8 @@ type RegisterStatistics struct {
 }
 
 type SubscribeStatistics struct {
-	Date               time.Time `json:"date" db:"subscriptions_count"`
-	SubscriptionsCount int       `json:"registrations_count" db:"subscriptions_count"`
+	Date               time.Time `json:"date" db:"subscription_date"`
+	SubscriptionsCount int       `json:"subscriptions_count" db:"subscriptions_count"`
 }
 
 func (u *User) BeforeCreate() error {
