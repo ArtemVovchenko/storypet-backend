@@ -228,7 +228,7 @@ func (r *UserRepository) ChangePassword(userID int, newPassword string) error {
 func (r *UserRepository) AssignRole(userID int, roleID int) error {
 	var userCurrentRoleID int
 	if err := r.store.db.Get(
-		userCurrentRoleID,
+		&userCurrentRoleID,
 		`SELECT role_id FROM public.user_roles WHERE user_id = $1`,
 		userID,
 	); err != nil {
