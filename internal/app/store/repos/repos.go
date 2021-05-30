@@ -35,6 +35,7 @@ type RoleRepository interface {
 
 type PetRepository interface {
 	SelectAll() ([]models.Pet, error)
+	SelectByUserID(userID int) ([]models.Pet, error)
 	FindByNameAndOwner(name string, ownerID int) (*models.Pet, error)
 	FindByID(petID int) (*models.Pet, error)
 	CreatePet(pet *models.Pet) (*models.Pet, error)

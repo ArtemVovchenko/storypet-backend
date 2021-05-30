@@ -5,6 +5,7 @@ import (
 	validation "github.com/go-ozzo/ozzo-validation"
 	"github.com/go-ozzo/ozzo-validation/is"
 	"golang.org/x/crypto/bcrypt"
+	"time"
 )
 
 type User struct {
@@ -13,6 +14,8 @@ type User struct {
 	PasswordSHA256       string          `db:"password_sha256" json:"-"`
 	Username             string          `db:"username" json:"username"`
 	FullName             string          `db:"full_name" json:"full_name"`
+	RegistrationDate     *time.Time      `db:"registration_date" json:"registration_date"`
+	SubscriptionDate     *time.Time      `db:"subscription_date" json:"subscription_date"`
 	BackupEmail          *sql.NullString `db:"backup_email" json:"-"`
 	Location             *sql.NullString `db:"location" json:"-"`
 	Password             string          `json:"-"`
@@ -129,7 +132,7 @@ func (u *User) Update(other *User) {
 		u.SpecifiedLocation = other.SpecifiedLocation
 	}
 	if u.SpecifiedBackupEmail != other.SpecifiedBackupEmail && len(other.SpecifiedBackupEmail) > 0 {
-		u.SpecifiedLocation = other.SpecifiedLocation
+		u.SpecifiedBackupEmail = other.SpecifiedBackupEmail
 	}
 }
 

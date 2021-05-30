@@ -4,6 +4,7 @@ import (
 	"database/sql"
 	"github.com/ArtemVovchenko/storypet-backend/internal/app/models"
 	"github.com/jmoiron/sqlx"
+	"time"
 )
 
 type UserRepository struct {
@@ -30,8 +31,14 @@ func (r *UserRepository) Create(u *models.User) (*models.User, error) {
 		_ = transaction.Rollback()
 	}(transaction)
 
-	_, err = transaction.NamedExec(`INSERT INTO public.users (account_email, password_sha256, username, full_name, backup_email, location)
-		VALUES (:account_email, :password_sha256, :username, :full_name, :backup_email, :location) RETURNING user_id`, *u)
+	_, err = transaction.NamedExec(
+		`INSERT INTO public.users 
+    			  (account_email, password_sha256, username, full_name, backup_email, location, registration_date)
+			   VALUES 
+			      (:account_email, :password_sha256, :username, :full_name, :backup_email, :location, :registration_date) 
+			   RETURNING user_id`,
+		*u,
+	)
 	if err != nil {
 		r.store.logger.Println(err)
 		return nil, err
@@ -219,6 +226,15 @@ func (r *UserRepository) ChangePassword(userID int, newPassword string) error {
 }
 
 func (r *UserRepository) AssignRole(userID int, roleID int) error {
+	var userCurrentRoleID int
+	if err := r.store.db.Get(
+		userCurrentRoleID,
+		`SELECT role_id FROM public.user_roles WHERE user_id = $1`,
+		userID,
+	); err != nil {
+		r.store.logger.Println(err)
+		return err
+	}
 	transaction, err := r.store.db.Beginx()
 	if err != nil {
 		r.store.logger.Println(err)
@@ -241,6 +257,16 @@ func (r *UserRepository) AssignRole(userID int, roleID int) error {
 	); err != nil {
 		r.store.logger.Println(err)
 		return err
+	}
+	if userCurrentRoleID == 3 {
+		if _, err := r.store.db.Exec(
+			`UPDATE public.users SET subscription_date = $1 WHERE user_id = $2;`,
+			time.Now(),
+			userID,
+		); err != nil {
+			r.store.logger.Println(err)
+			return err
+		}
 	}
 	if err := transaction.Commit(); err != nil {
 		r.store.logger.Println(err)

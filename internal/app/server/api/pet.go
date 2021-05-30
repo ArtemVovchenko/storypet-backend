@@ -104,6 +104,23 @@ func (a *PetsAPI) ServeRootRequest(w http.ResponseWriter, r *http.Request) {
 
 	switch r.Method {
 	case http.MethodGet:
+		userID := r.URL.Query().Get("user_id")
+		if userID != "" {
+			rawUserID, err := strconv.ParseInt(userID, 10, 64)
+			if err != nil {
+				a.server.Logger().Printf("Parsing int err: %v, Request ID: %v", err, requestID)
+				a.server.RespondError(w, r, http.StatusBadRequest, nil)
+				return
+			}
+			pets, err := a.server.DatabaseStore().Pets().SelectByUserID(int(rawUserID))
+			if err != nil {
+				a.server.Logger().Printf("Database err: %v, Request ID: %v", err, requestID)
+				a.server.RespondError(w, r, http.StatusInternalServerError, nil)
+				return
+			}
+			a.server.Respond(w, r, http.StatusOK, pets)
+			return
+		}
 		pets, err := a.server.DatabaseStore().Pets().SelectAll()
 		if err != nil {
 			a.server.Logger().Printf("Database err: %v, Request ID: %v", err, requestID)

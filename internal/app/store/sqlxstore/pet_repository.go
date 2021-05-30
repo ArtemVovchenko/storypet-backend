@@ -21,6 +21,18 @@ func (r *PetRepository) SelectAll() ([]models.Pet, error) {
 	return petModels, nil
 }
 
+func (r *PetRepository) SelectByUserID(userID int) ([]models.Pet, error) {
+	var petModels []models.Pet
+	if err := r.store.db.Select(&petModels, `SELECT * FROM public.pets WHERE user_id = $1;`, userID); err != nil {
+		r.store.logger.Println(err)
+		return nil, err
+	}
+	for idx := range petModels {
+		petModels[idx].AfterCreate()
+	}
+	return petModels, nil
+}
+
 func (r *PetRepository) FindByNameAndOwner(name string, ownerID int) (*models.Pet, error) {
 	selectQuery := `SELECT * FROM public.pets WHERE name = $1 AND user_id = $2;`
 	petModel := &models.Pet{}

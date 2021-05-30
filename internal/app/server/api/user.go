@@ -12,6 +12,7 @@ import (
 	"github.com/lib/pq"
 	"net/http"
 	"strconv"
+	"time"
 )
 
 type UserAPI struct {
@@ -79,11 +80,13 @@ func (a *UserAPI) ServeRegistrationRequest(w http.ResponseWriter, r *http.Reques
 			return
 		}
 
+		currentTime := time.Now()
 		u := &models.User{
-			AccountEmail: rb.AccountEmail,
-			Password:     rb.Password,
-			Username:     rb.Username,
-			FullName:     rb.FullName,
+			AccountEmail:     rb.AccountEmail,
+			Password:         rb.Password,
+			Username:         rb.Username,
+			FullName:         rb.FullName,
+			RegistrationDate: &currentTime,
 		}
 		u.SetBackupEmail(rb.BackupEmail)
 		u.SetLocation(rb.Location)
