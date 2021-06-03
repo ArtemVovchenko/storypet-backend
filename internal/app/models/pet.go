@@ -248,3 +248,24 @@ func (p *PetHealthReport) AfterCreate() {
 		p.SpecifiedReportComments = p.ReportComments.String
 	}
 }
+
+type FoodCaloriesReport struct {
+	Date              time.Time `db:"date" json:"date"`
+	FoodTotalCalories float64   `db:"eat_ccal" json:"food_total_calories"`
+}
+
+type RERCaloriesReport struct {
+	Date             time.Time `db:"date" json:"date"`
+	RERTotalCalories float64   `db:"rer_ccal" json:"rer_total_calories"`
+}
+
+type AnthropometryReport struct {
+	Date   time.Time `json:"date" db:"date"`
+	Weight float64   `json:"weight" db:"weight"`
+	Height float64   `json:"height" db:"height"`
+}
+
+type TodayReport struct {
+	FoodTotalCalories float64 `db:"eat_ccal" json:"food_total_calories"`
+	RERTotalCalories  float64 `db:"rer_ccal" json:"rer_total_calories"`
+}

@@ -67,6 +67,13 @@ type PetRepository interface {
 	SelectPetActivityRecords(petID int) ([]models.Activity, error)
 	SelectPetActivityRecordsInInterval(petID int, start time.Time, end time.Time) ([]models.Activity, error)
 	SelectPetActivityRecordsToTime(petID int, start time.Time) ([]models.Activity, error)
+
+	GetPetStatistics(petID int) (
+		[]models.FoodCaloriesReport,
+		[]models.RERCaloriesReport,
+		[]models.AnthropometryReport,
+		error)
+	GetPetDateStatistics(petID int, day time.Time) (*models.TodayReport, error)
 }
 
 type VaccineRepository interface {
@@ -86,7 +93,8 @@ type FoodRepository interface {
 	DeleteByID(foodID int) (*models.Food, error)
 
 	AddPetEating(eating *models.Eating) error
-	GetPetsEatingsForDate(petID int, date time.Time) ([]models.Food, error)
+	GetPetsEatingsForDate(petID int, date time.Time) ([]models.Eating, error)
+	GetPetsEatings(petID int) ([]models.Eating, error)
 }
 
 type DumpRepository interface {

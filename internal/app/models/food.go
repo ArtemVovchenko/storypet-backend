@@ -74,9 +74,10 @@ func (f *Food) SetSpecifiedManufacturer(manufacturer *string) {
 }
 
 type Eating struct {
-	PetID  int       `json:"pet_id" db:"pet_id"`
-	FoodID int       `json:"food_id" db:"food_id"`
-	Time   time.Time `json:"time" db:"eating_timestamp"`
+	PetID         int       `json:"pet_id" db:"pet_id"`
+	FoodID        int       `json:"food_id" db:"food_id"`
+	Time          time.Time `json:"time" db:"eating_timestamp"`
+	PortionWeight float64   `json:"portion_weight" db:"portion_weight"`
 }
 
 func (e *Eating) Validate() error {

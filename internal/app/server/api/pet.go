@@ -90,6 +90,16 @@ func (a *PetsAPI) ConfigureRouter(router *mux.Router) {
 		Name("Pets Eating Request").
 		Methods(http.MethodGet, http.MethodPost).
 		HandlerFunc(a.ServeEatingRequest)
+
+	sb.Path("/{id:[0-9]+}/statistic").
+		Name("Pet Statistic").
+		Methods(http.MethodGet).
+		HandlerFunc(a.ServeStatisticRequest)
+
+	sb.Path("/{id:[0-9]+}/statistic/today").
+		Name("Pet this day statistic").
+		Methods(http.MethodGet).
+		HandlerFunc(a.ServeTodayStatisticRequest)
 }
 
 func (a *PetsAPI) ServeRootRequest(w http.ResponseWriter, r *http.Request) {
@@ -100,6 +110,57 @@ func (a *PetsAPI) ServeRootRequest(w http.ResponseWriter, r *http.Request) {
 	if err != nil {
 		a.server.RespondError(w, r, http.StatusInternalServerError, nil)
 		return
+	}
+
+	type responsePetEntity struct {
+		PetID          int             `json:"pet_id"`
+		Name           string          `json:"name"`
+		Owner          *models.User    `json:"owner"`
+		PetType        *models.PetType `json:"pet_type"`
+		Mother         *models.Pet     `json:"mother,omitempty"`
+		Father         *models.Pet     `json:"father,omitempty"`
+		MotherVerified bool            `json:"mother_verified"`
+		FatherVerified bool            `json:"father_verified"`
+		Breed          string          `json:"breed,omitempty"`
+		FamilyName     string          `json:"family_name,omitempty"`
+	}
+	responsePetEntitiesBuilder := func(pets []models.Pet) ([]responsePetEntity, error) {
+		responseEntities := make([]responsePetEntity, len(pets), len(pets))
+		for idx := range pets {
+			owner, err := a.server.DatabaseStore().Users().FindByID(pets[idx].UserID)
+			petType, err := a.server.DatabaseStore().Pets().FindTypeByID(pets[idx].PetType)
+			var mother, father *models.Pet
+			var breed, familyName string
+			if pets[idx].FatherID != nil && pets[idx].FatherID.Valid {
+				father, err = a.server.DatabaseStore().Pets().FindByID(int(pets[idx].FatherID.Int64))
+			}
+			if pets[idx].MotherID != nil && pets[idx].MotherID.Valid {
+				mother, err = a.server.DatabaseStore().Pets().FindByID(int(pets[idx].MotherID.Int64))
+			}
+			if pets[idx].Breed != nil && pets[idx].Breed.Valid {
+				breed = pets[idx].Breed.String
+			}
+			if pets[idx].FamilyName != nil && pets[idx].FamilyName.Valid {
+				familyName = pets[idx].FamilyName.String
+			}
+			if err != nil {
+				return nil, err
+			}
+
+			responseEntities[idx] = responsePetEntity{
+				PetID:          pets[idx].PetID,
+				Name:           pets[idx].Name,
+				Owner:          owner,
+				PetType:        petType,
+				Mother:         mother,
+				Father:         father,
+				MotherVerified: pets[idx].MotherVerified,
+				FatherVerified: pets[idx].FatherVerified,
+				Breed:          breed,
+				FamilyName:     familyName,
+			}
+		}
+		return responseEntities, nil
 	}
 
 	switch r.Method {
@@ -118,7 +179,13 @@ func (a *PetsAPI) ServeRootRequest(w http.ResponseWriter, r *http.Request) {
 				a.server.RespondError(w, r, http.StatusInternalServerError, nil)
 				return
 			}
-			a.server.Respond(w, r, http.StatusOK, pets)
+			responseEntities, err := responsePetEntitiesBuilder(pets)
+			if err != nil {
+				a.server.Logger().Printf("Database err: %v, Request ID: %v", err, requestID)
+				a.server.RespondError(w, r, http.StatusInternalServerError, nil)
+				return
+			}
+			a.server.Respond(w, r, http.StatusOK, responseEntities)
 			return
 		}
 		pets, err := a.server.DatabaseStore().Pets().SelectAll()
@@ -127,7 +194,13 @@ func (a *PetsAPI) ServeRootRequest(w http.ResponseWriter, r *http.Request) {
 			a.server.RespondError(w, r, http.StatusInternalServerError, nil)
 			return
 		}
-		a.server.Respond(w, r, http.StatusOK, pets)
+		responseEntities, err := responsePetEntitiesBuilder(pets)
+		if err != nil {
+			a.server.Logger().Printf("Database err: %v, Request ID: %v", err, requestID)
+			a.server.RespondError(w, r, http.StatusInternalServerError, nil)
+			return
+		}
+		a.server.Respond(w, r, http.StatusOK, responseEntities)
 
 	case http.MethodPost:
 		type requestBody struct {
@@ -190,6 +263,55 @@ func (a *PetsAPI) ServeIDRequest(w http.ResponseWriter, r *http.Request) {
 	}
 	requestedID := int(rawID)
 
+	type responsePetEntity struct {
+		PetID          int             `json:"pet_id"`
+		Name           string          `json:"name"`
+		Owner          *models.User    `json:"owner"`
+		PetType        *models.PetType `json:"pet_type"`
+		Mother         *models.Pet     `json:"mother,omitempty"`
+		Father         *models.Pet     `json:"father,omitempty"`
+		MotherVerified bool            `json:"mother_verified"`
+		FatherVerified bool            `json:"father_verified"`
+		Breed          string          `json:"breed,omitempty"`
+		FamilyName     string          `json:"family_name,omitempty"`
+	}
+
+	responsePetEntityBuilder := func(pet *models.Pet) (*responsePetEntity, error) {
+		owner, err := a.server.DatabaseStore().Users().FindByID(pet.UserID)
+		petType, err := a.server.DatabaseStore().Pets().FindTypeByID(pet.PetType)
+		var mother, father *models.Pet
+		var breed, familyName string
+		if pet.FatherID != nil && pet.FatherID.Valid {
+			father, err = a.server.DatabaseStore().Pets().FindByID(int(pet.FatherID.Int64))
+		}
+		if pet.MotherID != nil && pet.MotherID.Valid {
+			mother, err = a.server.DatabaseStore().Pets().FindByID(int(pet.MotherID.Int64))
+		}
+		if pet.Breed != nil && pet.Breed.Valid {
+			breed = pet.Breed.String
+		}
+		if pet.FamilyName != nil && pet.FamilyName.Valid {
+			familyName = pet.FamilyName.String
+		}
+		if err != nil {
+			return nil, err
+		}
+
+		responseEntity := &responsePetEntity{
+			PetID:          pet.PetID,
+			Name:           pet.Name,
+			Owner:          owner,
+			PetType:        petType,
+			Mother:         mother,
+			Father:         father,
+			MotherVerified: pet.MotherVerified,
+			FatherVerified: pet.FatherVerified,
+			Breed:          breed,
+			FamilyName:     familyName,
+		}
+		return responseEntity, nil
+	}
+
 	switch r.Method {
 	case http.MethodGet:
 		petModel, err := a.server.DatabaseStore().Pets().FindByID(requestedID)
@@ -202,7 +324,13 @@ func (a *PetsAPI) ServeIDRequest(w http.ResponseWriter, r *http.Request) {
 			a.server.RespondError(w, r, http.StatusInternalServerError, nil)
 			return
 		}
-		a.server.Respond(w, r, http.StatusOK, petModel)
+		responseEntity, err := responsePetEntityBuilder(petModel)
+		if err != nil {
+			a.server.Logger().Printf("Database err: %v, Request ID: %v", err, requestID)
+			a.server.RespondError(w, r, http.StatusInternalServerError, nil)
+			return
+		}
+		a.server.Respond(w, r, http.StatusOK, responseEntity)
 
 	case http.MethodPut:
 		type requestBody struct {
@@ -1283,20 +1411,31 @@ func (a *PetsAPI) ServeEatingRequest(w http.ResponseWriter, r *http.Request) {
 	}
 	requestedPetID := int(rawID)
 
-	switch r.Method {
-	case http.MethodGet:
-		var dateT time.Time
-		date := r.URL.Query().Get("date")
-		if date == "" {
-			dateT = time.Now()
-		} else {
-			dateT, err = time.Parse("2006-01-02", date)
+	type eatingsResponseEntity struct {
+		PortionWeight float64      `json:"portion_weight"`
+		EatingTime    time.Time    `json:"eating_time"`
+		Food          *models.Food `json:"food"`
+	}
+
+	eatingsResponseEntityBuilder := func(eatingModels []models.Eating) ([]eatingsResponseEntity, error) {
+		responseModels := make([]eatingsResponseEntity, len(eatingModels), len(eatingModels))
+		for idx := range eatingModels {
+			foodModel, err := a.server.DatabaseStore().Foods().FindByID(eatingModels[idx].FoodID)
 			if err != nil {
-				a.server.RespondError(w, r, http.StatusBadRequest, exceptions.UnprocessableURLQuery)
-				return
+				return nil, err
+			}
+			responseModels[idx] = eatingsResponseEntity{
+				PortionWeight: eatingModels[idx].PortionWeight,
+				EatingTime:    eatingModels[idx].Time,
+				Food:          foodModel,
 			}
 		}
-		foodModels, err := a.server.DatabaseStore().Foods().GetPetsEatingsForDate(requestedPetID, dateT)
+		return responseModels, nil
+	}
+
+	switch r.Method {
+	case http.MethodGet:
+		eatings, err := a.server.DatabaseStore().Foods().GetPetsEatings(requestedPetID)
 		if err != nil {
 			if errors.Is(err, sql.ErrNoRows) {
 				a.server.RespondError(w, r, http.StatusOK, nil)
@@ -1306,11 +1445,22 @@ func (a *PetsAPI) ServeEatingRequest(w http.ResponseWriter, r *http.Request) {
 			a.server.RespondError(w, r, http.StatusInternalServerError, nil)
 			return
 		}
-		a.server.Respond(w, r, http.StatusOK, foodModels)
+		responseModels, err := eatingsResponseEntityBuilder(eatings)
+		if err != nil {
+			if errors.Is(err, sql.ErrNoRows) {
+				a.server.RespondError(w, r, http.StatusOK, nil)
+				return
+			}
+			a.server.Logger().Printf("Database error: %v Request ID: %v", err, requestID)
+			a.server.RespondError(w, r, http.StatusInternalServerError, nil)
+			return
+		}
+		a.server.Respond(w, r, http.StatusOK, responseModels)
 
 	case http.MethodPost:
 		type requestBody struct {
-			FoodID int `json:"food_id"`
+			FoodID        int     `json:"food_id"`
+			PortionWeight float64 `json:"portion_weight"`
 		}
 		rb := &requestBody{}
 		if err := json.NewDecoder(r.Body).Decode(rb); err != nil {
@@ -1318,9 +1468,10 @@ func (a *PetsAPI) ServeEatingRequest(w http.ResponseWriter, r *http.Request) {
 			return
 		}
 		eatingModel := &models.Eating{
-			PetID:  requestedPetID,
-			FoodID: rb.FoodID,
-			Time:   time.Now(),
+			PetID:         requestedPetID,
+			FoodID:        rb.FoodID,
+			Time:          time.Now(),
+			PortionWeight: rb.PortionWeight,
 		}
 		if err := a.server.DatabaseStore().Foods().AddPetEating(eatingModel); err != nil {
 			a.server.RespondError(w, r, http.StatusUnprocessableEntity, nil)
@@ -1328,4 +1479,65 @@ func (a *PetsAPI) ServeEatingRequest(w http.ResponseWriter, r *http.Request) {
 		}
 		a.server.Respond(w, r, http.StatusCreated, nil)
 	}
+}
+
+func (a *PetsAPI) ServeStatisticRequest(w http.ResponseWriter, r *http.Request) {
+	type responseBody struct {
+		FoodCalories  []models.FoodCaloriesReport  `json:"food_calories"`
+		RERCalories   []models.RERCaloriesReport   `json:"rer_calories"`
+		Anthropometry []models.AnthropometryReport `json:"anthropometry"`
+	}
+
+	if r.Method == http.MethodOptions {
+		return
+	}
+	requestID, _, err := a.server.GetAuthorizedRequestInfo(r)
+	if err != nil {
+		a.server.RespondError(w, r, http.StatusInternalServerError, nil)
+		return
+	}
+	rawID, err := strconv.ParseInt(mux.Vars(r)["id"], 10, 64)
+	if err != nil {
+		a.server.RespondError(w, r, http.StatusBadRequest, exceptions.UnprocessableURIParam)
+		return
+	}
+	requestedPetID := int(rawID)
+
+	foodCalories, rerCalories, anthropometry, err := a.server.DatabaseStore().Pets().GetPetStatistics(requestedPetID)
+	if err != nil {
+		a.server.Logger().Printf("Database error: %v RequestID: %v", err, requestID)
+		a.server.RespondError(w, r, http.StatusInternalServerError, err)
+		return
+	}
+	rb := &responseBody{
+		FoodCalories:  foodCalories,
+		RERCalories:   rerCalories,
+		Anthropometry: anthropometry,
+	}
+	a.server.Respond(w, r, http.StatusOK, rb)
+}
+
+func (a *PetsAPI) ServeTodayStatisticRequest(w http.ResponseWriter, r *http.Request) {
+	if r.Method == http.MethodOptions {
+		return
+	}
+	requestID, _, err := a.server.GetAuthorizedRequestInfo(r)
+	if err != nil {
+		a.server.RespondError(w, r, http.StatusInternalServerError, nil)
+		return
+	}
+	rawID, err := strconv.ParseInt(mux.Vars(r)["id"], 10, 64)
+	if err != nil {
+		a.server.RespondError(w, r, http.StatusBadRequest, exceptions.UnprocessableURIParam)
+		return
+	}
+	requestedPetID := int(rawID)
+
+	dayStatistics, err := a.server.DatabaseStore().Pets().GetPetDateStatistics(requestedPetID, time.Now())
+	if err != nil {
+		a.server.Logger().Printf("Database error: %v RequestID: %v", err, requestID)
+		a.server.RespondError(w, r, http.StatusInternalServerError, err)
+		return
+	}
+	a.server.Respond(w, r, http.StatusOK, dayStatistics)
 }

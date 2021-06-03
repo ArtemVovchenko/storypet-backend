@@ -153,7 +153,7 @@ func (r *FoodRepository) DeleteByID(foodID int) (*models.Food, error) {
 }
 
 func (r *FoodRepository) AddPetEating(eating *models.Eating) error {
-	query := `INSERT INTO public.eatings (eating_timestamp, pet_id, food_id) VALUES (:eating_timestamp, :pet_id, :food_id);`
+	query := `INSERT INTO public.eatings (eating_timestamp, pet_id, food_id, portion_weight) VALUES (:eating_timestamp, :pet_id, :food_id, :portion_weight);`
 	transaction, err := r.store.db.Beginx()
 	if err != nil {
 		r.store.logger.Println(err)
@@ -175,20 +175,22 @@ func (r *FoodRepository) AddPetEating(eating *models.Eating) error {
 	return nil
 }
 
-func (r *FoodRepository) GetPetsEatingsForDate(petID int, date time.Time) ([]models.Food, error) {
-	query := `
-		SELECT f.food_id, food_name, calories, description, manufacturer FROM public.eatings 
-		JOIN public.food f 
-		ON f.food_id = eatings.food_id
-		WHERE pet_id = $1 AND eating_timestamp::date = $2;`
-
-	var foods []models.Food
-	if err := r.store.db.Select(&foods, query, petID, date); err != nil {
+func (r *FoodRepository) GetPetsEatingsForDate(petID int, date time.Time) ([]models.Eating, error) {
+	query := `SELECT * FROM eatings WHERE pet_id = $1 AND eating_timestamp::date = $2 ORDER BY eating_timestamp DESC;`
+	var eatings []models.Eating
+	if err := r.store.db.Select(&eatings, query, petID, date); err != nil {
 		r.store.logger.Println(err)
 		return nil, err
 	}
-	for idx := range foods {
-		foods[idx].AfterCreate()
+	return eatings, nil
+}
+
+func (r *FoodRepository) GetPetsEatings(petID int) ([]models.Eating, error) {
+	query := `SELECT * FROM eatings WHERE pet_id = $1 ORDER BY eating_timestamp DESC;`
+	var eatings []models.Eating
+	if err := r.store.db.Select(&eatings, query, petID); err != nil {
+		r.store.logger.Println(err)
+		return nil, err
 	}
-	return foods, nil
+	return eatings, nil
 }

@@ -1,6 +1,8 @@
 package sqlxstore
 
 import (
+	"database/sql"
+	"errors"
 	"github.com/ArtemVovchenko/storypet-backend/internal/app/models"
 	"time"
 )
@@ -580,4 +582,78 @@ func (r *PetRepository) SelectPetActivityRecordsToTime(petID int, start time.Tim
 		return nil, err
 	}
 	return petActivityModels, nil
+}
+
+func (r *PetRepository) GetPetStatistics(petID int) (
+	[]models.FoodCaloriesReport,
+	[]models.RERCaloriesReport,
+	[]models.AnthropometryReport,
+	error) {
+	foodQuery := `
+		SELECT date(eating_timestamp), SUM(calories * eatings.portion_weight) AS "eat_ccal" FROM eatings
+		INNER JOIN food f ON f.food_id = eatings.food_id
+		WHERE pet_id = $1
+		GROUP BY date(eating_timestamp);`
+	RERQuery := `
+		SELECT DATE(a.record_time), 70 * pt.rer_coefficient * POWER(a.weight, 0.75) as rer_ccal FROM pets
+		INNER JOIN anthropometries a on pets.pet_id = a.pet_id
+		INNER JOIN pet_types pt on pt.type_id = pets.pet_type
+		WHERE a.pet_id = $1;`
+	anthropometryQuery := `
+		SELECT DATE(record_time) as date, height, weight FROM anthropometries WHERE pet_id = $1;`
+
+	var foodModels []models.FoodCaloriesReport
+	var rerModels []models.RERCaloriesReport
+	var anthropometryModels []models.AnthropometryReport
+
+	if err := r.store.db.Select(&foodModels, foodQuery, petID); err != nil && !errors.Is(err, sql.ErrNoRows) {
+		r.store.logger.Println(err)
+		return nil, nil, nil, err
+	}
+
+	if err := r.store.db.Select(&rerModels, RERQuery, petID); err != nil && !errors.Is(err, sql.ErrNoRows) {
+		r.store.logger.Println(err)
+		return nil, nil, nil, err
+	}
+
+	if err := r.store.db.Select(&anthropometryModels, anthropometryQuery, petID); err != nil && !errors.Is(err, sql.ErrNoRows) {
+		r.store.logger.Println(err)
+		return nil, nil, nil, err
+	}
+
+	return foodModels, rerModels, anthropometryModels, nil
+}
+
+func (r *PetRepository) GetPetDateStatistics(petID int, day time.Time) (*models.TodayReport, error) {
+	currentFoodCaloriesQuery := `
+		SELECT SUM(calories * eatings.portion_weight) AS "eat_ccal" FROM eatings
+		INNER JOIN food f ON f.food_id = eatings.food_id
+		WHERE pet_id = $1 AND eating_timestamp::date = $2
+		GROUP BY date(eating_timestamp);`
+	currentRERCaloriesQuery := `
+		SELECT 70 * (
+			SELECT rer_coefficient FROM pet_types INNER JOIN pets p on pet_types.type_id = p.pet_type WHERE pet_id = $1
+			) *
+			power(
+				(SELECT weight FROM anthropometries WHERE pet_id = $1 ORDER BY record_time DESC LIMIT 1),
+				0.75
+			) AS "rer_ccal";`
+
+	var currentFoodCal float64
+	var currentRERCal float64
+
+	if err := r.store.db.Get(&currentFoodCal, currentFoodCaloriesQuery, petID, day); err != nil {
+		r.store.logger.Println(err)
+		return nil, err
+	}
+
+	if err := r.store.db.Get(&currentRERCal, currentRERCaloriesQuery, petID); err != nil {
+		r.store.logger.Println(err)
+		return nil, err
+	}
+
+	return &models.TodayReport{
+		FoodTotalCalories: currentFoodCal,
+		RERTotalCalories:  currentRERCal,
+	}, nil
 }
