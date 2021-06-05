@@ -74,6 +74,9 @@ type PetRepository interface {
 		[]models.AnthropometryReport,
 		error)
 	GetPetDateStatistics(petID int, day time.Time) (*models.TodayReport, error)
+
+	CreatePetHealthReport(report *models.PetHealthReport) error
+	GetAllPetHealthReports(petID int) ([]models.PetHealthReport, error)
 }
 
 type VaccineRepository interface {

@@ -228,10 +228,10 @@ func (a *Activity) Validate() error {
 type PetHealthReport struct {
 	PetID                   int             `json:"pet_id" db:"pet_id"`
 	ReportTimestamp         time.Time       `json:"report_timestamp" db:"report_timestamp"`
-	VeterinarianID          int             `json:"veterinarian_id" db:"veterinarian_id"`
+	VeterinarianID          int             `json:"creator_id" db:"veterinarian_id"`
 	ReportConclusion        string          `json:"report_conclusion" db:"report_conclusion"`
 	ReportComments          *sql.NullString `json:"-" db:"report_comments"`
-	SpecifiedReportComments string          `json:"report_comments"`
+	SpecifiedReportComments string          `json:"report_comment"`
 }
 
 func (p *PetHealthReport) BeforeCreate() {
@@ -240,6 +240,12 @@ func (p *PetHealthReport) BeforeCreate() {
 			String: p.SpecifiedReportComments,
 			Valid:  true,
 		}
+	}
+}
+
+func (p *PetHealthReport) SetSpecifiedReportComments(reportComments *string) {
+	if reportComments != nil {
+		p.SpecifiedReportComments = *reportComments
 	}
 }
 

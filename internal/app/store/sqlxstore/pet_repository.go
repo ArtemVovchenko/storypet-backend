@@ -657,3 +657,42 @@ func (r *PetRepository) GetPetDateStatistics(petID int, day time.Time) (*models.
 		RERTotalCalories:  currentRERCal,
 	}, nil
 }
+
+func (r *PetRepository) CreatePetHealthReport(report *models.PetHealthReport) error {
+	insertQuery := `
+		INSERT INTO public.pet_health_reports (pet_id, veterinarian_id, report_timestamp, report_conclusion, report_comments)
+		VALUES (:pet_id, :veterinarian_id, :report_timestamp, :report_conclusion, :report_comments);`
+
+	transaction, err := r.store.db.Beginx()
+	if err != nil {
+		r.store.logger.Println(err)
+		return err
+	}
+	defer func() {
+		_ = transaction.Rollback()
+	}()
+
+	if _, err := transaction.NamedExec(insertQuery, report); err != nil {
+		r.store.logger.Println(err)
+		return err
+	}
+
+	if err := transaction.Commit(); err != nil {
+		r.store.logger.Println(err)
+		return err
+	}
+	return nil
+}
+
+func (r *PetRepository) GetAllPetHealthReports(petID int) ([]models.PetHealthReport, error) {
+	query := `SELECT * FROM public.pet_health_reports WHERE pet_id = $1;`
+	var reports []models.PetHealthReport
+	if err := r.store.db.Select(&reports, query, petID); err != nil {
+		r.store.logger.Println(err)
+		return nil, err
+	}
+	for idx := range reports {
+		reports[idx].AfterCreate()
+	}
+	return reports, nil
+}

@@ -56,6 +56,11 @@ func (a *PetsAPI) ConfigureRouter(router *mux.Router) {
 		Methods(http.MethodGet, http.MethodPost, http.MethodDelete).
 		HandlerFunc(a.ServeParentsRequest)
 
+	sb.Path("/{id:[0-9]+}/reports").
+		Name("Pets health reports Request").
+		Methods(http.MethodGet, http.MethodPost).
+		HandlerFunc(a.ServeReportRequest)
+
 	sb.Path("/{id:[0-9]+}/parents/verify/{parent:father|mother}").
 		Name("Pets parent verification request").
 		Methods(http.MethodPost).
@@ -106,7 +111,7 @@ func (a *PetsAPI) ServeRootRequest(w http.ResponseWriter, r *http.Request) {
 	if r.Method == http.MethodOptions {
 		return
 	}
-	requestID, session, err := a.server.GetAuthorizedRequestInfo(r)
+	requestID, _, err := a.server.GetAuthorizedRequestInfo(r)
 	if err != nil {
 		a.server.RespondError(w, r, http.StatusInternalServerError, nil)
 		return
@@ -208,29 +213,29 @@ func (a *PetsAPI) ServeRootRequest(w http.ResponseWriter, r *http.Request) {
 			PetType    int     `json:"pet_type"`
 			Breed      *string `json:"breed"`
 			FamilyName *string `json:"family_name"`
-			UserID     *int    `json:"user_id"`
+			UserID     *int    `json:"owner_id"`
+			MotherID   *int    `json:"mother_id"`
+			FatherID   *int    `json:"father_id"`
 		}
 		rb := &requestBody{}
 		if err := json.NewDecoder(r.Body).Decode(rb); err != nil {
 			a.server.RespondError(w, r, http.StatusBadRequest, err)
 			return
 		}
+		if rb.UserID == nil {
+			a.server.RespondError(w, r, http.StatusUnprocessableEntity, errors.New("pet owner is not specified"))
+			return
+		}
 		newPetModel := &models.Pet{
 			Name:    rb.Name,
 			PetType: rb.PetType,
-		}
-		petOwner := session.UserID
-		if rb.UserID != nil && session.UserID != *rb.UserID {
-			if !permissions.AnyRoleHavePermissions(session.Roles, permissions.Permissions().UsersPermission, permissions.Permissions().PetsPermission) {
-				a.server.RespondError(w, r, http.StatusForbidden, exceptions.CanNotAssignPetToAnotherUser)
-				return
-			}
-			petOwner = *rb.UserID
+			UserID:  *rb.UserID,
 		}
 
-		newPetModel.UserID = petOwner
 		newPetModel.SetSpecifiedBreed(rb.Breed)
 		newPetModel.SetSpecifiedFamilyName(rb.FamilyName)
+		newPetModel.SetSpecifiedMotherID(rb.MotherID)
+		newPetModel.SetSpecifiedFatherID(rb.FatherID)
 		newPetModel.BeforeCreate()
 
 		if err := newPetModel.Validate(); err != nil {
@@ -338,7 +343,9 @@ func (a *PetsAPI) ServeIDRequest(w http.ResponseWriter, r *http.Request) {
 			PetType    int     `json:"pet_type"`
 			Breed      *string `json:"breed"`
 			FamilyName *string `json:"family_name"`
-			UserID     *int    `json:"user_id"`
+			UserID     *int    `json:"owner_id"`
+			FatherID   *int    `json:"father_id"`
+			MotherID   *int    `json:"mother_id"`
 		}
 		updatingPet, err := a.server.DatabaseStore().Pets().FindByID(requestedID)
 		if err != nil {
@@ -381,6 +388,8 @@ func (a *PetsAPI) ServeIDRequest(w http.ResponseWriter, r *http.Request) {
 		newPetModel.UserID = petOwner
 		newPetModel.SetSpecifiedBreed(rb.Breed)
 		newPetModel.SetSpecifiedFamilyName(rb.FamilyName)
+		newPetModel.SetSpecifiedFatherID(rb.FatherID)
+		newPetModel.SetSpecifiedMotherID(rb.MotherID)
 		newPetModel.BeforeCreate()
 		if err := newPetModel.Validate(); err != nil {
 			a.server.RespondError(w, r, http.StatusUnprocessableEntity, err)
@@ -748,6 +757,97 @@ func (a *PetsAPI) ServeParentsRequest(w http.ResponseWriter, r *http.Request) {
 			return
 		}
 		a.server.Respond(w, r, http.StatusOK, nil)
+	}
+}
+
+func (a *PetsAPI) ServeReportRequest(w http.ResponseWriter, r *http.Request) {
+	if r.Method == http.MethodOptions {
+		return
+	}
+	requestID, _, err := a.server.GetAuthorizedRequestInfo(r)
+	if err != nil {
+		a.server.RespondError(w, r, http.StatusInternalServerError, nil)
+		return
+	}
+	rawID, err := strconv.ParseInt(mux.Vars(r)["id"], 10, 64)
+	if err != nil {
+		a.server.RespondError(w, r, http.StatusBadRequest, exceptions.UnprocessableURIParam)
+		return
+	}
+	requestedID := int(rawID)
+
+	switch r.Method {
+	case http.MethodGet:
+		type commentResponseEntity struct {
+			Report       *models.PetHealthReport `json:"report"`
+			Veterinarian *models.User            `json:"creator"`
+		}
+		responseEntitiesCreator := func(reportModels []models.PetHealthReport) ([]commentResponseEntity, error) {
+			responseEntities := make([]commentResponseEntity, len(reportModels), len(reportModels))
+			for idx := range reportModels {
+				creator, err := a.server.DatabaseStore().Users().FindByID(reportModels[idx].VeterinarianID)
+				if err != nil {
+					return nil, err
+				}
+				responseEntities[idx] = commentResponseEntity{
+					Report:       &reportModels[idx],
+					Veterinarian: creator,
+				}
+			}
+			return responseEntities, nil
+		}
+
+		reportModels, err := a.server.DatabaseStore().Pets().GetAllPetHealthReports(requestedID)
+		if err != nil {
+			if errors.Is(err, sql.ErrNoRows) {
+				a.server.RespondError(w, r, http.StatusNotFound, nil)
+				return
+			}
+			a.server.Logger().Printf("DATABASE Error: %v RequestID: %v", err, requestID)
+			a.server.RespondError(w, r, http.StatusInternalServerError, nil)
+			return
+		}
+
+		responseModels, err := responseEntitiesCreator(reportModels)
+		if err != nil {
+			if errors.Is(err, sql.ErrNoRows) {
+				a.server.RespondError(w, r, http.StatusNotFound, nil)
+				return
+			}
+			a.server.Logger().Printf("DATABASE Error: %v RequestID: %v", err, requestID)
+			a.server.RespondError(w, r, http.StatusInternalServerError, nil)
+			return
+		}
+
+		a.server.Respond(w, r, http.StatusOK, responseModels)
+
+	case http.MethodPost:
+		type requestBody struct {
+			UserID     int     `json:"creator_id"`
+			Conclusion string  `json:"conclusion"`
+			Comments   *string `json:"comment"`
+		}
+
+		rb := &requestBody{}
+		if err := json.NewDecoder(r.Body).Decode(rb); err != nil {
+			a.server.RespondError(w, r, http.StatusBadRequest, err)
+			return
+		}
+
+		commentModel := &models.PetHealthReport{
+			PetID:            requestedID,
+			ReportTimestamp:  time.Now(),
+			VeterinarianID:   rb.UserID,
+			ReportConclusion: rb.Conclusion,
+		}
+		commentModel.SetSpecifiedReportComments(rb.Comments)
+		commentModel.BeforeCreate()
+		if err := a.server.DatabaseStore().Pets().CreatePetHealthReport(commentModel); err != nil {
+			a.server.Logger().Printf("DATABASE Error: %v RequestID: %v", err, requestID)
+			a.server.RespondError(w, r, http.StatusInternalServerError, nil)
+			return
+		}
+		a.server.Respond(w, r, http.StatusCreated, nil)
 	}
 }
 
