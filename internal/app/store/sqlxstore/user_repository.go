@@ -408,7 +408,7 @@ func (r *UserRepository) GetStatistics() ([]models.RegisterStatistics, []models.
 		&registers,
 		`
 			SELECT registration_date, COUNT(user_id) AS registrations_count FROM (
-    			SELECT DATE(registration_date) AS registration_date,  user_id AS user_id FROM users WHERE registration_date iS NOT NULL
+    			SELECT DATE(registration_date) AS registration_date, user_id FROM public.users WHERE registration_date IS NOT NULL
     		) AS tmp GROUP BY tmp.registration_date;`,
 	); err != nil {
 		r.store.logger.Println(err)
