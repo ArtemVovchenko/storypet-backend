@@ -1448,7 +1448,7 @@ func (a *PetsAPI) ServePetActivityRequest(w http.ResponseWriter, r *http.Request
 	case http.MethodPost:
 		type requestBody struct {
 			Distance  float64 `json:"distance"`
-			PeakSpeed float64 `json:"peak_speed"`
+			MeanSpeed float64 `json:"mean_speed"`
 		}
 
 		petModel, err := a.server.DatabaseStore().Pets().FindByID(requestedPetID)
@@ -1480,11 +1480,7 @@ func (a *PetsAPI) ServePetActivityRequest(w http.ResponseWriter, r *http.Request
 			PetID:           requestedPetID,
 			RecordTimestamp: time.Now(),
 			Distance:        rb.Distance,
-			PeakSpeed:       rb.PeakSpeed,
-		}
-		if err := model.Validate(); err != nil {
-			a.server.RespondError(w, r, http.StatusUnprocessableEntity, err)
-			return
+			MeanSpeed:       rb.MeanSpeed,
 		}
 		if err := a.server.DatabaseStore().Pets().CreateActivityRecord(model); err != nil {
 			a.server.Logger().Printf("Database error: %v Request ID: %v", err, requestID)
