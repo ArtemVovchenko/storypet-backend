@@ -662,15 +662,15 @@ func (r *PetRepository) GetPetDateStatistics(petID int, day time.Time) (*models.
 	var currentRERCal float64
 	currentActivity := &activityResult{}
 
-	if err := r.store.db.Get(&currentFoodCal, currentFoodCaloriesQuery, petID, day); err != nil {
+	if err := r.store.db.Get(&currentFoodCal, currentFoodCaloriesQuery, petID, day); err != nil && !errors.Is(err, sql.ErrNoRows) {
 		r.store.logger.Println(err)
 		return nil, err
 	}
-	if err := r.store.db.Get(&currentRERCal, currentRERCaloriesQuery, petID); err != nil {
+	if err := r.store.db.Get(&currentRERCal, currentRERCaloriesQuery, petID); err != nil && !errors.Is(err, sql.ErrNoRows) {
 		r.store.logger.Println(err)
 		return nil, err
 	}
-	if err := r.store.db.Get(currentActivity, currentActivityQuery, petID, day); err != nil {
+	if err := r.store.db.Get(currentActivity, currentActivityQuery, petID, day); err != nil && !errors.Is(err, sql.ErrNoRows) {
 		r.store.logger.Println(err)
 		return nil, err
 	}

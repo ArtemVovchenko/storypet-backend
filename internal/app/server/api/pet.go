@@ -1637,6 +1637,10 @@ func (a *PetsAPI) ServeTodayStatisticRequest(w http.ResponseWriter, r *http.Requ
 
 	dayStatistics, err := a.server.DatabaseStore().Pets().GetPetDateStatistics(requestedPetID, time.Now())
 	if err != nil {
+		if errors.Is(err, sql.ErrNoRows) {
+			a.server.RespondError(w, r, http.StatusNotFound, nil)
+			return
+		}
 		a.server.Logger().Printf("Database error: %v RequestID: %v", err, requestID)
 		a.server.RespondError(w, r, http.StatusInternalServerError, err)
 		return
