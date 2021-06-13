@@ -1,7 +1,10 @@
 package api
 
 import (
+	"database/sql"
 	"encoding/json"
+	"errors"
+	"github.com/ArtemVovchenko/storypet-backend/internal/app/models"
 	"github.com/ArtemVovchenko/storypet-backend/internal/app/server/api/exceptions"
 	"github.com/ArtemVovchenko/storypet-backend/internal/app/sessions"
 	"github.com/ArtemVovchenko/storypet-backend/internal/pkg/auth"
@@ -49,6 +52,20 @@ func (a SessionAPI) ConfigureRoutes(router *mux.Router) {
 			a.server.Middleware().Authentication.IsAuthorised(
 				http.HandlerFunc(a.ServeLogoutRequest),
 			),
+		)
+
+	router.Path("api/session/iot/login").
+		Name("IoT Device Login").
+		Methods(http.MethodPost).
+		Handler(
+			http.HandlerFunc(a.ServeIoTLoginRequest),
+		)
+
+	router.Path("api/session/iot/data").
+		Name("IoT Device Data").
+		Methods(http.MethodPost).
+		Handler(
+			http.HandlerFunc(a.ServeIoTDataRequest),
 		)
 }
 
@@ -225,4 +242,79 @@ func (a *SessionAPI) saveSession(tokenPairInfo *auth.TokenPairInfo, session *ses
 		return err
 	}
 	return nil
+}
+
+func (a *SessionAPI) ServeIoTLoginRequest(w http.ResponseWriter, r *http.Request) {
+	if r.Method == http.MethodOptions {
+		return
+	}
+	switch r.Method {
+	case http.MethodPost:
+		type requestBody struct {
+			AccessSecret string `json:"access_secret"`
+		}
+
+		rb := &requestBody{}
+		if err := json.NewDecoder(r.Body).Decode(rb); err != nil {
+			a.server.RespondError(w, r, http.StatusBadRequest, err)
+			return
+		}
+
+		deviceModel, err := a.server.DatabaseStore().IoTDevicesRepository().GetByAccessSecret(rb.AccessSecret)
+		if err != nil {
+			if errors.Is(err, sql.ErrNoRows) {
+				a.server.RespondError(w, r, http.StatusNotFound, nil)
+				return
+			}
+			a.server.Respond(w, r, http.StatusUnauthorized, nil)
+			return
+		}
+
+		token, err := auth.CreateIoTToken(deviceModel.PetID)
+		if err != nil {
+			a.server.RespondError(w, r, http.StatusUnprocessableEntity, err)
+			return
+		}
+
+		a.server.Respond(w, r, http.StatusOK, map[string]string{
+			"access": token.Token,
+		})
+	}
+}
+
+func (a *SessionAPI) ServeIoTDataRequest(w http.ResponseWriter, r *http.Request) {
+	if r.Method == http.MethodOptions {
+		return
+	}
+	switch r.Method {
+	case http.MethodPost:
+		type requestBody struct {
+			Distance  float64 `json:"distance"`
+			MeanSpeed float64 `json:"mean_speed"`
+		}
+
+		rb := &requestBody{}
+		if err := json.NewDecoder(r.Body).Decode(rb); err != nil {
+			a.server.RespondError(w, r, http.StatusBadRequest, err)
+			return
+		}
+
+		authTokenMeta, err := auth.ExtractIoTAccessMeta(r)
+		if err != nil {
+			a.server.Respond(w, r, http.StatusUnauthorized, nil)
+			return
+		}
+
+		activity := &models.Activity{
+			PetID:           authTokenMeta.PetID,
+			RecordTimestamp: time.Now(),
+			Distance:        rb.Distance,
+			MeanSpeed:       rb.MeanSpeed,
+		}
+		if err := a.server.DatabaseStore().Pets().CreateActivityRecord(activity); err != nil {
+			a.server.RespondError(w, r, http.StatusInternalServerError, err)
+			return
+		}
+		a.server.Respond(w, r, http.StatusCreated, nil)
+	}
 }

@@ -14,12 +14,13 @@ type PostgreDatabaseStore struct {
 	db     *sqlx.DB
 	logger *log.Logger
 
-	userRepository    *UserRepository
-	roleRepository    *RoleRepository
-	petRepository     *PetRepository
-	vaccineRepository *VaccineRepository
-	foodRepository    *FoodRepository
-	dumpRepository    *DumpRepository
+	userRepository       *UserRepository
+	roleRepository       *RoleRepository
+	petRepository        *PetRepository
+	vaccineRepository    *VaccineRepository
+	foodRepository       *FoodRepository
+	dumpRepository       *DumpRepository
+	ioTDevicesRepository *IoTDevicesRepository
 }
 
 func NewPostgreDatabaseStore(logger *log.Logger) *PostgreDatabaseStore {
@@ -111,4 +112,14 @@ func (s *PostgreDatabaseStore) Dumps() repos.DumpRepository {
 		store: s,
 	}
 	return s.dumpRepository
+}
+
+func (s *PostgreDatabaseStore) IoTDevicesRepository() repos.IoTDevicesRepository {
+	if s.ioTDevicesRepository != nil {
+		return s.ioTDevicesRepository
+	}
+	s.ioTDevicesRepository = &IoTDevicesRepository{
+		store: s,
+	}
+	return s.ioTDevicesRepository
 }

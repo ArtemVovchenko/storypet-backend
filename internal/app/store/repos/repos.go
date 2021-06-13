@@ -108,3 +108,8 @@ type DumpRepository interface {
 	SelectByName(dumpFileName string) (*models.Dump, error)
 	DeleteByName(dumpFileName string) (*models.Dump, error)
 }
+
+type IoTDevicesRepository interface {
+	GetByID(deviceID int) (*models.IoTDevice, error)
+	GetByAccessSecret(accessSecret string) (*models.IoTDevice, error)
+}

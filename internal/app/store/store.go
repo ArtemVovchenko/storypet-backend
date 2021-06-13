@@ -18,6 +18,7 @@ type DatabaseStore interface {
 	Vaccines() repos.VaccineRepository
 	Foods() repos.FoodRepository
 	Dumps() repos.DumpRepository
+	IoTDevicesRepository() repos.IoTDevicesRepository
 }
 
 type PersistentStore interface {
