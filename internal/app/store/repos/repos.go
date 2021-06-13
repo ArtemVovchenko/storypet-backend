@@ -72,6 +72,7 @@ type PetRepository interface {
 		[]models.FoodCaloriesReport,
 		[]models.RERCaloriesReport,
 		[]models.AnthropometryReport,
+		[]models.ActivityReport,
 		error)
 	GetPetDateStatistics(petID int, day time.Time) (*models.TodayReport, error)
 

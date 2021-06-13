@@ -1582,6 +1582,7 @@ func (a *PetsAPI) ServeStatisticRequest(w http.ResponseWriter, r *http.Request) 
 		FoodCalories  []models.FoodCaloriesReport  `json:"food_calories"`
 		RERCalories   []models.RERCaloriesReport   `json:"rer_calories"`
 		Anthropometry []models.AnthropometryReport `json:"anthropometry"`
+		Activity      []models.ActivityReport      `json:"activity"`
 	}
 
 	if r.Method == http.MethodOptions {
@@ -1599,8 +1600,12 @@ func (a *PetsAPI) ServeStatisticRequest(w http.ResponseWriter, r *http.Request) 
 	}
 	requestedPetID := int(rawID)
 
-	foodCalories, rerCalories, anthropometry, err := a.server.DatabaseStore().Pets().GetPetStatistics(requestedPetID)
+	foodCalories, rerCalories, anthropometry, activity, err := a.server.DatabaseStore().Pets().GetPetStatistics(requestedPetID)
 	if err != nil {
+		if errors.Is(err, sql.ErrNoRows) {
+			a.server.RespondError(w, r, http.StatusNotFound, nil)
+			return
+		}
 		a.server.Logger().Printf("Database error: %v RequestID: %v", err, requestID)
 		a.server.RespondError(w, r, http.StatusInternalServerError, err)
 		return
@@ -1609,6 +1614,7 @@ func (a *PetsAPI) ServeStatisticRequest(w http.ResponseWriter, r *http.Request) 
 		FoodCalories:  foodCalories,
 		RERCalories:   rerCalories,
 		Anthropometry: anthropometry,
+		Activity:      activity,
 	}
 	a.server.Respond(w, r, http.StatusOK, rb)
 }

@@ -263,7 +263,15 @@ type AnthropometryReport struct {
 	Height float64   `json:"height" db:"height"`
 }
 
+type ActivityReport struct {
+	Date          time.Time `json:"date" db:"date"`
+	MeanSpeed     float64   `json:"mean_speed" db:"mean_speed"`
+	TotalDistance float64   `json:"total_distance" db:"distance"`
+}
+
 type TodayReport struct {
 	FoodTotalCalories float64 `db:"eat_ccal" json:"food_total_calories"`
 	RERTotalCalories  float64 `db:"rer_ccal" json:"rer_total_calories"`
+	MeanSpeed         float64 `json:"mean_speed"`
+	TotalDistance     float64 `json:"total_distance"`
 }

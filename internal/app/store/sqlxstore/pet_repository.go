@@ -588,6 +588,7 @@ func (r *PetRepository) GetPetStatistics(petID int) (
 	[]models.FoodCaloriesReport,
 	[]models.RERCaloriesReport,
 	[]models.AnthropometryReport,
+	[]models.ActivityReport,
 	error) {
 	foodQuery := `
 		SELECT date(eating_timestamp), SUM(calories * eatings.portion_weight) AS "eat_ccal" FROM eatings
@@ -595,36 +596,50 @@ func (r *PetRepository) GetPetStatistics(petID int) (
 		WHERE pet_id = $1
 		GROUP BY date(eating_timestamp);`
 	RERQuery := `
-		SELECT DATE(a.record_time), 70 * pt.rer_coefficient * POWER(a.weight, 0.75) as rer_ccal FROM pets
+		SELECT date(a.record_time), 70 * pt.rer_coefficient * POWER(a.weight, 0.75) as rer_ccal FROM pets
 		INNER JOIN anthropometries a on pets.pet_id = a.pet_id
 		INNER JOIN pet_types pt on pt.type_id = pets.pet_type
 		WHERE a.pet_id = $1;`
 	anthropometryQuery := `
 		SELECT DATE(record_time) as date, height, weight FROM anthropometries WHERE pet_id = $1;`
+	activityQuery := `
+		SELECT date(record_timestamp) as date, SUM(distance) as distance, AVG(mean_speed) as mean_speed FROM public.activity
+		WHERE pet_id = $1
+		GROUP BY date(record_timestamp);`
 
 	var foodModels []models.FoodCaloriesReport
 	var rerModels []models.RERCaloriesReport
 	var anthropometryModels []models.AnthropometryReport
+	var activityModels []models.ActivityReport
 
 	if err := r.store.db.Select(&foodModels, foodQuery, petID); err != nil && !errors.Is(err, sql.ErrNoRows) {
 		r.store.logger.Println(err)
-		return nil, nil, nil, err
+		return nil, nil, nil, nil, err
 	}
 
 	if err := r.store.db.Select(&rerModels, RERQuery, petID); err != nil && !errors.Is(err, sql.ErrNoRows) {
 		r.store.logger.Println(err)
-		return nil, nil, nil, err
+		return nil, nil, nil, nil, err
 	}
 
 	if err := r.store.db.Select(&anthropometryModels, anthropometryQuery, petID); err != nil && !errors.Is(err, sql.ErrNoRows) {
 		r.store.logger.Println(err)
-		return nil, nil, nil, err
+		return nil, nil, nil, nil, err
 	}
 
-	return foodModels, rerModels, anthropometryModels, nil
+	if err := r.store.db.Select(&activityModels, activityQuery, petID); err != nil && !errors.Is(err, sql.ErrNoRows) {
+		r.store.logger.Println(err)
+		return nil, nil, nil, nil, err
+	}
+	return foodModels, rerModels, anthropometryModels, activityModels, nil
 }
 
 func (r *PetRepository) GetPetDateStatistics(petID int, day time.Time) (*models.TodayReport, error) {
+	type activityResult struct {
+		Distance  float64 `db:"distance"`
+		MeanSpeed float64 `db:"mean_speed"`
+	}
+
 	currentFoodCaloriesQuery := `
 		SELECT SUM(calories * eatings.portion_weight) AS "eat_ccal" FROM eatings
 		INNER JOIN food f ON f.food_id = eatings.food_id
@@ -638,16 +653,24 @@ func (r *PetRepository) GetPetDateStatistics(petID int, day time.Time) (*models.
 				(SELECT weight FROM anthropometries WHERE pet_id = $1 ORDER BY record_time DESC LIMIT 1),
 				0.75
 			) AS "rer_ccal";`
+	currentActivityQuery := `
+		SELECT SUM(distance) as distance, AVG(mean_speed) as mean_speed FROM public.activity 
+		WHERE pet_id = $1 AND record_timestamp::date = $2
+		GROUP BY date(record_timestamp);`
 
 	var currentFoodCal float64
 	var currentRERCal float64
+	currentActivity := &activityResult{}
 
 	if err := r.store.db.Get(&currentFoodCal, currentFoodCaloriesQuery, petID, day); err != nil {
 		r.store.logger.Println(err)
 		return nil, err
 	}
-
 	if err := r.store.db.Get(&currentRERCal, currentRERCaloriesQuery, petID); err != nil {
+		r.store.logger.Println(err)
+		return nil, err
+	}
+	if err := r.store.db.Get(currentActivity, currentActivityQuery, petID, day); err != nil {
 		r.store.logger.Println(err)
 		return nil, err
 	}
@@ -655,6 +678,8 @@ func (r *PetRepository) GetPetDateStatistics(petID int, day time.Time) (*models.
 	return &models.TodayReport{
 		FoodTotalCalories: currentFoodCal,
 		RERTotalCalories:  currentRERCal,
+		MeanSpeed:         currentActivity.MeanSpeed,
+		TotalDistance:     currentActivity.Distance,
 	}, nil
 }
 
