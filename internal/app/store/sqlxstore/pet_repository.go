@@ -531,7 +531,7 @@ func (r *PetRepository) CreateActivityRecord(record *models.Activity) error {
 		INSERT INTO public.activity
 			(record_timestamp, pet_id, distance, mean_speed)
 		VALUES
-			(:record_timestamp, :pet_id, :distance, :peak_speed);`
+			(:record_timestamp, :pet_id, :distance, :mean_speed);`
 
 	transaction, err := r.store.db.Beginx()
 	if err != nil {
