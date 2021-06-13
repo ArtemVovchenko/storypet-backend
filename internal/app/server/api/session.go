@@ -54,14 +54,14 @@ func (a SessionAPI) ConfigureRoutes(router *mux.Router) {
 			),
 		)
 
-	router.Path("api/session/iot/login").
+	router.Path("/api/session/iot/login").
 		Name("IoT Device Login").
 		Methods(http.MethodPost).
 		Handler(
 			http.HandlerFunc(a.ServeIoTLoginRequest),
 		)
 
-	router.Path("api/session/iot/data").
+	router.Path("/api/session/iot/data").
 		Name("IoT Device Data").
 		Methods(http.MethodPost).
 		Handler(
