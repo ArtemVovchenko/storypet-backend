@@ -40,6 +40,7 @@ type PetRepository interface {
 	SelectByUserID(userID int) ([]models.Pet, error)
 	FindByNameAndOwner(name string, ownerID int) (*models.Pet, error)
 	FindByID(petID int) (*models.Pet, error)
+	SelectByVeterinarianID(veterinarianID int) ([]models.Pet, error)
 	CreatePet(pet *models.Pet) (*models.Pet, error)
 	UpdatePet(pet *models.Pet) (*models.Pet, error)
 	DeleteByID(petID int) (*models.Pet, error)

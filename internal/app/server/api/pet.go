@@ -36,6 +36,11 @@ func (a *PetsAPI) ConfigureRouter(router *mux.Router) {
 		Methods(http.MethodGet, http.MethodPut, http.MethodDelete).
 		HandlerFunc(a.ServeIDRequest)
 
+	sb.Path("/veterinarian").
+		Name("Veterinarian Pets Request").
+		Methods(http.MethodGet).
+		HandlerFunc(a.ServeVeterinarianSearchRequest)
+
 	sb.Path("/types").
 		Name("Pets types Root Request").
 		Methods(http.MethodGet, http.MethodPost).
@@ -1646,4 +1651,85 @@ func (a *PetsAPI) ServeTodayStatisticRequest(w http.ResponseWriter, r *http.Requ
 		return
 	}
 	a.server.Respond(w, r, http.StatusOK, dayStatistics)
+}
+
+func (a *PetsAPI) ServeVeterinarianSearchRequest(w http.ResponseWriter, r *http.Request) {
+	type responsePetEntity struct {
+		PetID          int             `json:"pet_id"`
+		Name           string          `json:"name"`
+		Owner          *models.User    `json:"owner"`
+		PetType        *models.PetType `json:"pet_type"`
+		Mother         *models.Pet     `json:"mother,omitempty"`
+		Father         *models.Pet     `json:"father,omitempty"`
+		MotherVerified bool            `json:"mother_verified"`
+		FatherVerified bool            `json:"father_verified"`
+		Breed          string          `json:"breed,omitempty"`
+		FamilyName     string          `json:"family_name,omitempty"`
+	}
+
+	if r.Method == http.MethodOptions {
+		return
+	}
+
+	responsePetEntitiesBuilder := func(pets []models.Pet) ([]responsePetEntity, error) {
+		responseEntities := make([]responsePetEntity, len(pets), len(pets))
+		for idx := range pets {
+			owner, err := a.server.DatabaseStore().Users().FindByID(pets[idx].UserID)
+			petType, err := a.server.DatabaseStore().Pets().FindTypeByID(pets[idx].PetType)
+			var mother, father *models.Pet
+			var breed, familyName string
+			if pets[idx].FatherID != nil && pets[idx].FatherID.Valid {
+				father, err = a.server.DatabaseStore().Pets().FindByID(int(pets[idx].FatherID.Int64))
+			}
+			if pets[idx].MotherID != nil && pets[idx].MotherID.Valid {
+				mother, err = a.server.DatabaseStore().Pets().FindByID(int(pets[idx].MotherID.Int64))
+			}
+			if pets[idx].Breed != nil && pets[idx].Breed.Valid {
+				breed = pets[idx].Breed.String
+			}
+			if pets[idx].FamilyName != nil && pets[idx].FamilyName.Valid {
+				familyName = pets[idx].FamilyName.String
+			}
+			if err != nil {
+				return nil, err
+			}
+
+			responseEntities[idx] = responsePetEntity{
+				PetID:          pets[idx].PetID,
+				Name:           pets[idx].Name,
+				Owner:          owner,
+				PetType:        petType,
+				Mother:         mother,
+				Father:         father,
+				MotherVerified: pets[idx].MotherVerified,
+				FatherVerified: pets[idx].FatherVerified,
+				Breed:          breed,
+				FamilyName:     familyName,
+			}
+		}
+		return responseEntities, nil
+	}
+
+	requestID, session, err := a.server.GetAuthorizedRequestInfo(r)
+	if err != nil {
+		a.server.RespondError(w, r, http.StatusInternalServerError, nil)
+		return
+	}
+	subscribedPets, err := a.server.DatabaseStore().Pets().SelectByVeterinarianID(session.UserID)
+	if err != nil {
+		if errors.Is(err, sql.ErrNoRows) {
+			a.server.RespondError(w, r, http.StatusNotFound, nil)
+			return
+		}
+		a.server.Logger().Printf("Database error: %v RequestID: %v", err, requestID)
+		a.server.RespondError(w, r, http.StatusInternalServerError, err)
+		return
+	}
+	responseEntities, err := responsePetEntitiesBuilder(subscribedPets)
+	if err != nil {
+		a.server.Logger().Printf("Database err: %v, Request ID: %v", err, requestID)
+		a.server.RespondError(w, r, http.StatusInternalServerError, nil)
+		return
+	}
+	a.server.Respond(w, r, http.StatusOK, responseEntities)
 }

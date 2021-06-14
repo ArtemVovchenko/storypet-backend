@@ -201,6 +201,22 @@ func (r *PetRepository) DeleteVeterinarian(petID int) error {
 	return nil
 }
 
+func (r *PetRepository) SelectByVeterinarianID(veterinarianID int) ([]models.Pet, error) {
+	query := `SELECT * FROM public.pets WHERE veterinarian_id = $1;`
+	var petModels []models.Pet
+	if err := r.store.db.Select(&petModels, query, veterinarianID); err != nil {
+		if errors.Is(err, sql.ErrNoRows) {
+			return nil, nil
+		}
+		r.store.logger.Println(err)
+		return nil, err
+	}
+	for idx := range petModels {
+		petModels[idx].AfterCreate()
+	}
+	return petModels, nil
+}
+
 func (r *PetRepository) SpecifyParents(fatherID *int, motherID *int, petID int) error {
 	spMother := `UPDATE public.pets SET mother_id = $1, mother_verified = FALSE WHERE pet_id = $2;`
 	spFather := `UPDATE public.pets SET father_id = $1, father_verified = FALSE WHERE pet_id = $2;`
